@@ -5,6 +5,7 @@ extra info on use of app (if needed):
 Link to UI prototype:
 
 Link to Kanban:
+https://miro.com/app/board/uXjVJz9YZbw=/
 
 Link to audio/video of feedback:
 
