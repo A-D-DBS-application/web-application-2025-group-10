@@ -9,7 +9,7 @@ db = SQLAlchemy()
 # ============================
 probleem_type_enum = ENUM('Technisch', 'Esthetisch', 'Service/Levering', 'Andere', name='probleem_type', create_type=False)
 klacht_status_enum = ENUM('Ingediend', 'Goedgekeurd', 'Afgewezen', 'In behandeling', 'Afgehandeld', name='klacht_status', create_type=False)
-gebruikersrol_enum = ENUM('Vertegenwoordiger', 'GM', 'Internal Sales', name='gebruikersrol', create_type=False)
+gebruikersrol_enum = ENUM('Vertegenwoordiger', 'General Manager', 'Internal Sales', name='gebruikersrol', create_type=False)
 
 # ============================
 # MODELS
