@@ -3,6 +3,8 @@ from .models import db
 
 main = Blueprint('main', __name__)
 
-@main.route('/')
-def test():
-    return  render_template('test.html')
+@main.route('/', methods=['GET','POST'])
+def login():
+    if request.method == "POST"
+        email
+
