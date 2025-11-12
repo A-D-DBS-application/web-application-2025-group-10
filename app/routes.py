@@ -5,6 +5,6 @@ main = Blueprint('main', __name__)
 
 @main.route('/', methods=['GET','POST'])
 def login():
-    if request.method == "POST"
+    if request.method == "POST":
         email
 
