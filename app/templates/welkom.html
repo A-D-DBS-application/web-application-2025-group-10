@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Welkom</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 100px auto; padding: 20px; text-align: center; }
+        .success { color: green; font-size: 18px; margin: 20px 0; }
+        .user-info { background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0; }
+        .logout { color: #007bff; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <h2>Welkom!</h2>
+    
+    <div class="success">✅ Login succesvol!</div>
+    
+    <div class="user-info">
+        <p><strong>Naam:</strong> {{ user.naam }}</p>
+        <p><strong>Email:</strong> {{ user.email }}</p>
+        <p><strong>Rol:</strong> {{ user.rol }}</p>
+    </div>
+    
+    <a href="{{ url_for('main.logout') }}" class="logout">Uitloggen</a>
+</body>
+</html>
