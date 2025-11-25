@@ -74,3 +74,9 @@ def login():
         return render_template('login.html')
     
     return render_template('login.html')
+
+@main.route('/logout')
+def logout():
+    session.clear()
+    flash('Je bent uitgelogd', 'info')
+    return redirect(url_for('main.login'))
