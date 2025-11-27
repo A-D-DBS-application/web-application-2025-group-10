@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mijn Klachten</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            background: #23533e;
+            margin: 0;
+            padding: 20px;
+            color: white;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            margin-bottom: 30px; 
+        }
+        .back-button { 
+            background: #10b981; 
+            color: white; 
+            padding: 12px 24px; 
+            text-decoration: none; 
+            border-radius: 12px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        .back-button:hover {
+            background: #059669;
+            transform: translateY(-2px);
+        }
+        .header h1 {
+            color: white;
+            margin: 0;
+        }
+        .klachten-table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-top: 20px;
+            background: white;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        .klachten-table th, .klachten-table td { 
+            padding: 16px; 
+            text-align: left; 
+            border-bottom: 1px solid #e5e7eb; 
+            color: #1f2937;
+        }
+        .klachten-table th { 
+            background: #10b981; 
+            color: white;
+            font-weight: bold;
+        }
+        .klachten-table tr:hover {
+            background: #f0fdf4;
+        }
+        .status-badge { 
+            padding: 8px 12px; 
+            border-radius: 12px; 
+            font-size: 12px; 
+            font-weight: bold; 
+        }
+        .status-Ingediend { background: #fff3cd; color: #856404; }
+        .status-Goedgekeurd { background: #d1ecf1; color: #0c5460; }
+        .status-Afgewezen { background: #f8d7da; color: #721c24; }
+        .status-Inbehandeling { background: #d4edda; color: #155724; }
+        .status-Afgehandeld { background: #e2e3e5; color: #383d41; }
+        .action-link { 
+            background: #10b981;
+            color: white;
+            padding: 8px 16px;
+            text-decoration: none; 
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            display: inline-block;
+        }
+        .action-link:hover {
+            background: #059669;
+            transform: translateY(-2px);
+        }
+        .delete-btn {
+            background: #095724;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        .delete-btn:hover {
+            background: #13743a;
+            transform: translateY(-2px);
+        }
+        .no-klachten { 
+            text-align: center; 
+            padding: 60px; 
+            color: white;
+            background: white;
+            border-radius: 16px;
+            color: #1f2937;
+        }
+        .no-klachten button {
+            background: #10b981;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: bold;
+            margin-top: 15px;
+            transition: all 0.3s ease;
+        }
+        .no-klachten button:hover {
+            background: #059669;
+            transform: translateY(-2px);
+        }
+        .flash-messages { 
+            margin: 20px 0; 
+        }
+        .alert {
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        .error { 
+            background: #fee2e2;
+            color: #dc2626;
+            border: 1px solid #fecaca;
+        }
+        .success { 
+            background: #dcfce7;
+            color: #16a34a;
+            border: 1px solid #bbf7d0;
+        }
+        .priority-high {
+            color: #dc2626;
+            font-weight: bold;
+            background: #fee2e2;
+            padding: 6px 12px;
+            border-radius: 8px;
+            display: inline-block;
+        }
+        .priority-normal {
+            color: #6b7280;
+            background: #f3f4f6;
+            padding: 6px 12px;
+            border-radius: 8px;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <a href="{{ url_for('main.user_dashboard') }}" class="back-button">← Terug naar Dashboard</a>
+            <h1>Mijn Klachten</h1>
+        </div>
+
+        <div class="flash-messages">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+        </div>
+
+        {% if klachten %}
+            <table class="klachten-table">
+                <thead>
+                    <tr>
+                        <th>Klacht ID</th>
+                        <th>Datum Melding</th>
+                        <th>Status</th>
+                        <th>Prioriteit</th>
+                        <th>Acties</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for klacht in klachten %}
+                    <tr>
+                        <td><strong>#{{ klacht.klacht_id }}</strong></td>
+                        <td>
+                            {% if klacht.datum_melding %}
+                                {{ klacht.datum_melding.split('T')[0] }}
+                            {% else %}
+                                Onbekend
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="status-badge status-{{ klacht.status.replace(' ', '') }}">
+                                {{ klacht.status }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if klacht.prioriteit %}
+                                <span class="priority-high">⚠️ Hoog</span>
+                            {% else %}
+                                <span class="priority-normal">Normaal</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('main.klacht_details', klacht_id=klacht.klacht_id) }}" class="action-link">
+                                ℹ️ Meer info
+                            </a>
+                            <form method="POST" action="{{ url_for('main.klacht_verwijderen', klacht_id=klacht.klacht_id) }}" style="display: inline;">
+                                <button type="submit" class="delete-btn" 
+                                        onclick="return confirm('Weet je zeker dat je klacht #{{ klacht.klacht_id }} wilt verwijderen?')">
+                                    🗑️ Verwijderen
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <div class="no-klachten">
+                <h3>Nog geen klachten</h3>
+                <a href="{{ url_for('main.klacht_aanmaken') }}">
+                    <button>Eerste Klacht Aanmaken</button>
+                </a>
+            </div>
+        {% endif %}
+    </div>
+</body>
+</html>

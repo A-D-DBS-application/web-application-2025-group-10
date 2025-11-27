@@ -35,6 +35,7 @@ class Gebruiker(db.Model):
     telefoon = db.Column(db.SmallInteger)
     productiebedrijf_id = db.Column(db.Integer, db.ForeignKey('productiebedrijf.productiebedrijf_id', onupdate='CASCADE'))
 
+
     # Relatie naar statushistoriek die door deze gebruiker is gewijzigd
     statushistoriek = db.relationship('StatusHistoriek', backref='gewijzigd_door_gebruiker', lazy=True)
 
@@ -59,6 +60,7 @@ class Order(db.Model):
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=datetime.utcnow)
     klant_id = db.Column(db.Integer, db.ForeignKey('klant.klant_id'))
 
+
 class Probleemcategorie(db.Model):
     __tablename__ = 'probleemcategorie'
     categorie_id = db.Column(db.Integer, primary_key=True)
@@ -73,7 +75,7 @@ class Klacht(db.Model):
     vertegenwoordiger_id = db.Column(db.Integer, db.ForeignKey('gebruiker.gebruiker_id', ondelete='SET NULL'))
     klant_id = db.Column(db.Integer, db.ForeignKey('klant.klant_id', ondelete='SET NULL'))
     categorie_id = db.Column(db.Integer, db.ForeignKey('probleemcategorie.categorie_id', ondelete='SET NULL'))
-    status_platen = db.Column(db.Text)
+    order_nummer = db.Column(db.String(255), nullable=False)
     mogelijke_oorzaak = db.Column(db.Text)
     bijlages = db.Column(JSONB)
     prioriteit = db.Column(db.Boolean, default=False)
@@ -82,6 +84,7 @@ class Klacht(db.Model):
     reden_afwijzing = db.Column(db.Text)
     gm_opmerking = db.Column(db.Text)
     datum_laatst_bewerkt = db.Column(db.DateTime(timezone=True), default=datetime.utcnow)
+    
 
     # Relatie naar statushistoriek
     statushistoriek = db.relationship('StatusHistoriek', backref='klacht', lazy=True, cascade='all, delete')

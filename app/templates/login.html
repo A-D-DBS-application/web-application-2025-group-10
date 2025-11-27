@@ -1,37 +1,121 @@
 <!DOCTYPE html>
-<html>
+<html lang="nl">
 <head>
-    <title>Login</title>
+    <meta charset="UTF-8">
+    <title>Login – Vanca Group</title>
     <style>
-        body { font-family: Arial, sans-serif; max-width: 400px; margin: 100px auto; padding: 20px; }
-        .form-group { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 5px; }
-        input[type="text"], input[type="password"] { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
-        button { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; }
-        .error { color: red; margin-top: 10px; }
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: "Inter", Arial, sans-serif;
+            background-color: #23533e; /* Jullie groene kleur */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .login-container {
+            background: white;
+            padding: 40px 35px;
+            width: 100%;
+            max-width: 420px;
+            border-radius: 14px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+            text-align: center;
+        }
+
+        h2 {
+            margin-bottom: 25px;
+            font-weight: 600;
+            font-size: 26px;
+            color: #23533e;
+            letter-spacing: 1px;
+        }
+
+        .form-group {
+            text-align: left;
+            margin-bottom: 18px;
+        }
+
+        label {
+            font-weight: 600;
+            color: #23533e;
+            display: block;
+            margin-bottom: 6px;
+        }
+
+        input[type="text"],
+        input[type="password"] {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 15px;
+        }
+
+        input:focus {
+            border-color: #23533e;
+            outline: none;
+            box-shadow: 0 0 4px rgba(67, 88, 86, 0.4);
+        }
+
+        button {
+            width: 100%;
+            background: #23533e;
+            color: white;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s ease;
+            letter-spacing: 0.5px;
+        }
+
+        button:hover {
+            background: #23533e;
+        }
+
+        .error {
+            color: #b30000;
+            background: #ffe5e5;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
     </style>
 </head>
 <body>
-    <h2>Login</h2>
-    
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                <div class="error">{{ message }}</div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
-    
-    <form method="POST">
-        <div class="form-group">
-            <label>Email:</label>
-            <input type="text" name="email" required>
-        </div>
-        <div class="form-group">
-            <label>Wachtwoord:</label>
-            <input type="password" name="password" required>
-        </div>
-        <button type="submit">Inloggen</button>
-    </form>
+
+    <div class="login-container">
+
+        <h2>Inloggen</h2>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="error">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <form method="POST">
+            <div class="form-group">
+                <label>Emailadres</label>
+                <input type="text" name="email" required>
+            </div>
+
+            <div class="form-group">
+                <label>Wachtwoord</label>
+                <input type="password" name="password" required>
+            </div>
+
+            <button type="submit">Inloggen</button>
+        </form>
+    </div>
+
 </body>
 </html>

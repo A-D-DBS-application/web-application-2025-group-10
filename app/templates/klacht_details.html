@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Klacht Details</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            background: #23533e;
+            margin: 0;
+            padding: 20px;
+            color: white;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .header { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            margin-bottom: 30px; 
+        }
+        .back-button { 
+            background: #10b981; 
+            color: white; 
+            padding: 12px 24px; 
+            text-decoration: none; 
+            border-radius: 12px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        .back-button:hover {
+            background: #059669;
+            transform: translateY(-2px);
+        }
+        .header h1 {
+            color: white;
+            margin: 0;
+        }
+        .details-card {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 20px;
+            color: #1f2937;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        .detail-row {
+            display: flex;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .detail-label {
+            font-weight: bold;
+            width: 200px;
+            color: #374151;
+        }
+        .detail-value {
+            flex: 1;
+            color: #1f2937;
+        }
+        .status-badge { 
+            padding: 8px 12px; 
+            border-radius: 12px; 
+            font-size: 12px; 
+            font-weight: bold; 
+        }
+        .status-Ingediend { background: #fff3cd; color: #856404; }
+        .status-Goedgekeurd { background: #d1ecf1; color: #0c5460; }
+        .status-Afgewezen { background: #f8d7da; color: #721c24; }
+        .status-Inbehandeling { background: #d4edda; color: #155724; }
+        .status-Afgehandeld { background: #e2e3e5; color: #383d41; }
+        .priority-high {
+            color: #dc2626;
+            font-weight: bold;
+            background: #fee2e2;
+            padding: 6px 12px;
+            border-radius: 8px;
+        }
+        .priority-normal {
+            color: #6b7280;
+            background: #f3f4f6;
+            padding: 6px 12px;
+            border-radius: 8px;
+        }
+        .save-btn {
+            background: #0f5f1d;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            margin-right: 10px;
+            transition: all 0.3s ease;
+        }
+        .save-btn:hover {
+            background: #0d5b19;
+            transform: translateY(-2px);
+        }
+        .cancel-btn {
+            background: #1e8549;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.3s ease;
+        }
+        .cancel-btn:hover {
+            background: #1e8549;
+            transform: translateY(-2px);
+            text-decoration: none;
+        }
+        .edit-input, .edit-textarea, .edit-select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 2px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        .edit-input:focus, .edit-textarea:focus, .edit-select:focus {
+            outline: none;
+            border-color: #10b981;
+        }
+        .edit-textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        .button-group {
+            margin-top: 20px;
+            text-align: right;
+        }
+        .readonly-field {
+            background: #f9fafb;
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid #e5e7eb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <a href="{{ url_for('main.user_klachten') }}" class="back-button">← Terug naar Mijn Klachten</a>
+            <h1>Klacht Details #{{ klacht_id }}</h1>
+        </div>
+
+        <form method="POST" action="{{ url_for('main.klacht_bewerken', klacht_id=klacht_id) }}">
+            <div class="details-card">
+                <!-- Niet-bewerkbare velden -->
+                <div class="detail-row">
+                    <div class="detail-label">Klacht ID:</div>
+                    <div class="detail-value">
+                        <div class="readonly-field">#{{ klacht.klacht_id }}</div>
+                    </div>
+                </div>
+                
+                <div class="detail-row">
+                    <div class="detail-label">Datum Melding:</div>
+                    <div class="detail-value">
+                        <div class="readonly-field">
+                            {% if klacht.datum_melding %}
+                                {{ klacht.datum_melding.split('T')[0] }}
+                            {% else %}
+                                Onbekend
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="detail-row">
+                    <div class="detail-label">Klant:</div>
+                    <div class="detail-value">
+                        <div class="readonly-field">
+                            {% if klacht.klant %}
+                                {{ klacht.klant.klantnaam }} (ID: {{ klacht.klant_id }})
+                            {% else %}
+                                Klant ID: {{ klacht.klant_id }}
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="detail-row">
+                    <div class="detail-label">Status:</div>
+                    <div class="detail-value">
+                        <span class="status-badge status-{{ klacht.status.replace(' ', '') }}">
+                            {{ klacht.status }}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="detail-row">
+                    <div class="detail-label">Prioriteit:</div>
+                    <div class="detail-value">
+                        {% if klacht.prioriteit %}
+                            <span class="priority-high">⚠️ Hoog</span>
+                        {% else %}
+                            <span class="priority-normal">Normaal</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="detail-row">
+                    <div class="detail-label">GM Opmerking:</div>
+                    <div class="detail-value">
+                        <div class="readonly-field">{{ klacht.gm_opmerking or 'Geen opmerking' }}</div>
+                    </div>
+                </div>
+
+                <!-- Bewerkbare velden -->
+                <div class="detail-row">
+                    <div class="detail-label">Ordernummer:</div>
+                    <div class="detail-value">
+                        <input type="text" name="order_nummer" value="{{ klacht.order_nummer or '' }}" 
+                               class="edit-input" placeholder="Voer ordernummer in">
+                    </div>
+                </div>
+
+                <div class="detail-row">
+                    <div class="detail-label">Categorie:</div>
+                    <div class="detail-value">
+                        <select name="categorie_id" class="edit-select">
+                            {% for categorie in categorieen %}
+                                <option value="{{ categorie.categorie_id }}" 
+                                        {% if klacht.categorie_id == categorie.categorie_id %}selected{% endif %}>
+                                    {{ categorie.type }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="detail-row">
+                    <div class="detail-label">Mogelijke Oorzaak:</div>
+                    <div class="detail-value">
+                        <textarea name="mogelijke_oorzaak" class="edit-textarea" 
+                                  placeholder="Beschrijf de mogelijke oorzaak">{{ klacht.mogelijke_oorzaak or '' }}</textarea>
+                    </div>
+                </div>
+
+                <div class="detail-row">
+                    <div class="detail-label">Reden Afwijzing:</div>
+                    <div class="detail-value">
+                        <textarea name="reden_afwijzing" class="edit-textarea" 
+                                  placeholder="Geef de reden voor afwijzing op">{{ klacht.reden_afwijzing or '' }}</textarea>
+                    </div>
+                </div>
+
+                <div class="button-group">
+                    <button type="submit" class="save-btn">💾 Opslaan</button>
+                    <a href="{{ url_for('main.klacht_details', klacht_id=klacht_id) }}" class="cancel-btn">Annuleren</a>
+                </div>
+            </div>
+        </form>
+    </div>
+</body>
+</html>
