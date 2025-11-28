@@ -132,7 +132,6 @@ def user_klachten():
 			query = query.eq("vertegenwoordiger_id", user_id_int)
 
 		response = query.execute()
-		# Check for errors explicitly
 		check_supabase_response(response, "fetching klachten")
 		klachten = response.data if response.data else []
 		print(f"DEBUG: user_klachten role={role}, found {len(klachten)} klachten")
@@ -155,6 +154,7 @@ def user_klachten():
 		if date_to:
 			klachten = [k for k in klachten if k.get('datum_melding') and str(k['datum_melding'])[:10] <= date_to]
 
+		# categorieen for filter options (simple select)
 		categorieen_resp = supabase.table("probleemcategorie").select("categorie_id, type").execute()
 		check_supabase_response(categorieen_resp, "fetching probleemcategorie")
 		categorieen = categorieen_resp.data if categorieen_resp.data else []
@@ -177,12 +177,11 @@ def klachten_export():
 
 	role = normalized_role()
 	try:
-		# fetch and check
 		response = supabase.table("klacht").select("*").execute()
 		check_supabase_response(response, "export: fetching klachten")
 		klachten = response.data if response.data else []
 
-		# Apply filters
+		# filters unchanged
 		klant_id = request.args.get('klant_id')
 		categorie_id = request.args.get('categorie_id')
 		status = request.args.get('status')
@@ -200,13 +199,14 @@ def klachten_export():
 		if date_to:
 			klachten = [k for k in klachten if k.get('datum_melding') and str(k['datum_melding'])[:10] <= date_to]
 
-		# CSV build
+		# CSV build unchanged
 		output = io.StringIO()
 		writer = csv.writer(output)
 		header = ['klacht_id', 'vertegenwoordiger_id', 'klant_id', 'order_nummer', 'categorie_id', 'status', 'prioriteit', 'datum_melding']
 		writer.writerow(header)
 		for k in klachten:
-			writer.writerow([k.get('klacht_id'), k.get('vertegenwoordiger_id'), k.get('klant_id'), k.get('order_nummer'), k.get('categorie_id'), k.get('status'), k.get('prioriteit'), k.get('datum_melding')])
+			writer.writerow([k.get('klacht_id'), k.get('vertegenwoordiger_id'), k.get('klant_id'), k.get('order_nummer'),
+			                 k.get('categorie_id'), k.get('status'), k.get('prioriteit'), k.get('datum_melding')])
 
 		output.seek(0)
 		csv_data = output.getvalue()
@@ -226,34 +226,74 @@ def klacht_details(klacht_id):
 		return redirect(url_for('main.login'))
 
 	try:
-		klacht_response = supabase.table("klacht").select("*, klant:klant_id(klantnaam), categorie:probleemcategorie(type)").eq("klacht_id", klacht_id).execute()
+		# fetch complaint (simple select)
+		klacht_response = supabase.table("klacht").select("*").eq("klacht_id", klacht_id).execute()
 		check_supabase_response(klacht_response, "fetching single complaint")
 		if not klacht_response.data:
 			flash('Klacht niet gevonden', 'error')
 			return redirect(url_for('main.user_klachten'))
 		klacht_data = klacht_response.data[0]
 
+		# fetch klant if present
+		if klacht_data.get('klant_id'):
+			try:
+				kresp = supabase.table("klant").select("klantnaam").eq("klant_id", klacht_data['klant_id']).execute()
+				check_supabase_response(kresp, "fetch klant for details")
+				if kresp.data:
+					klacht_data['klant'] = {"klantnaam": kresp.data[0].get('klantnaam')}
+			except Exception as e:
+				print(f"Warning: could not fetch klant details: {e}")
+
+		# fetch categorie if present
+		if klacht_data.get('categorie_id'):
+			try:
+				cresp = supabase.table("probleemcategorie").select("type").eq("categorie_id", klacht_data['categorie_id']).execute()
+				check_supabase_response(cresp, "fetch categorie for details")
+				if cresp.data:
+					klacht_data['categorie'] = {"type": cresp.data[0].get('type')}
+			except Exception as e:
+				print(f"Warning: could not fetch categorie details: {e}")
+
+		# authorization check
 		if not can_view_klacht(klacht_data, session['user_id'], session.get('user_rol')):
 			flash('Toegang geweigerd', 'error')
 			return redirect(url_for('main.user_klachten'))
 
-		# status history and categories checks
+		# statushistoriek
 		sh_resp = supabase.table("statushistoriek").select("*").eq("klacht_id", klacht_id).order("datum_wijziging", {"ascending": False}).execute()
 		check_supabase_response(sh_resp, "status historiek")
 		statushistoriek = sh_resp.data if sh_resp.data else []
 
+		# categorieen
 		categorieen_response = supabase.table("probleemcategorie").select("categorie_id, type").execute()
 		check_supabase_response(categorieen_response, "fetching categories")
 		categorieen = categorieen_response.data if categorieen_response.data else []
 
+		# vertegenw if manager/key user
 		vertegenw = []
 		if normalized_role() in ('Admin', 'Key user'):
 			reps_resp = supabase.table("gebruiker").select("gebruiker_id, naam").eq("rol", "User").execute()
 			check_supabase_response(reps_resp, "fetching reps")
 			vertegenw = reps_resp.data if reps_resp.data else []
 
-		# bijlages handling
-		# ...existing code...
+		# bijlages handling...
+		if klacht_data.get('bijlages'):
+			new_bijlages = []
+			for b in klacht_data['bijlages']:
+				b_copy = dict(b)  # copy to avoid mutating original
+				if not b_copy.get('id'):
+					b_copy['id'] = str(uuid.uuid4())
+				if b_copy.get('content') and not b_copy.get('url'):
+					ct = b_copy.get('content_type', 'application/octet-stream')
+					b_copy['url'] = f"data:{ct};base64,{b_copy.get('content')}"
+				content_type = b_copy.get('content_type', '') or ''
+				if content_type.startswith('image/') or (b_copy.get('url', '').lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp'))):
+					b_copy['is_image'] = True
+				else:
+					b_copy['is_image'] = False
+				new_bijlages.append(b_copy)
+			klacht_data['bijlages'] = new_bijlages
+
 		return render_template('klacht_details.html', klacht=klacht_data, klacht_id=klacht_id, categorieen=categorieen, statushistoriek=statushistoriek, vertegenw=vertegenw)
 	except Exception as e:
 		print(f"Exception in klacht_details: {e}")

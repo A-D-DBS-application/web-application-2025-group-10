@@ -171,13 +171,13 @@
             <select name="klant_id">
                 <option value="">Alle klanten</option>
                 {% for klant in klanten %}
-                    <option value="{{ klant.klant_id }}" {% if request.args.get('klant_id') == str(klant.klant_id) %}selected{% endif %}>{{ klant.klantnaam }}</option>
+                    <option value="{{ klant.klant_id }}" {% if request.args.get('klant_id') == klant.klant_id|string %}selected{% endif %}>{{ klant.klantnaam }}</option>
                 {% endfor %}
             </select>
             <select name="categorie_id">
                 <option value="">Alle categorieën</option>
                 {% for categorie in categorieen %}
-                    <option value="{{ categorie.categorie_id }}" {% if request.args.get('categorie_id') == str(categorie.categorie_id) %}selected{% endif %}>{{ categorie.type }}</option>
+                    <option value="{{ categorie.categorie_id }}" {% if request.args.get('categorie_id') == categorie.categorie_id|string %}selected{% endif %}>{{ categorie.type }}</option>
                 {% endfor %}
             </select>
             <select name="status">
