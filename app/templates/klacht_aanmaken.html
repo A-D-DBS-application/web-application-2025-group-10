@@ -161,6 +161,7 @@
             background: var(--light);
             transition: all 0.3s ease;
             cursor: pointer;
+            position: relative;
         }
 
         .file-upload:hover {
@@ -334,7 +335,7 @@
 
             <div class="card-body">
                 <div class="user-info">
-                    <strong>Ingelogd als:</strong> {{ user_naam }} (User)
+                    <strong>Ingelogd als:</strong> {{ user_naam }} ({{ session.get('user_rol') }})
                 </div>
 
                 <form method="POST" enctype="multipart/form-data">
@@ -380,14 +381,24 @@
                         <div class="form-group full-width">
                             <label for="bijlage">Bijlage (Foto)</label>
                             <div class="file-upload" id="fileUploadArea">
-                                <input type="file" name="bijlage" id="bijlage" accept="image/*">
+                                <!-- allow multiple files; backend will iterate over request.files.getlist('bijlage') -->
+                                <input type="file" name="bijlage" id="bijlage" accept="image/*,application/pdf" multiple>
                                 <label for="bijlage" class="file-upload-label">
                                     <div class="upload-icon">📷</div>
-                                    <div>Klik om een foto te uploaden</div>
-                                    <div style="font-size: 0.9rem; color: #666;">(Optioneel - JPG, PNG, etc.)</div>
+                                    <div id="fileUploadText">Klik om bestanden te uploaden</div>
+                                    <div style="font-size: 0.9rem; color: #666;">(Optioneel - JPG, PNG, PDF, etc.)</div>
                                 </label>
                             </div>
-                            <div id="filePreview" class="file-preview" style="display: none;"></div>
+                            <div id="filePreview" class="file-preview" style="display: none;">
+                                <ul id="filesList" style="list-style: none; padding-left: 0; margin: 0;"></ul>
+                            </div>
+                        </div>
+
+                        <div class="form-group full-width">
+                            <label>
+                                <input type="checkbox" name="notify_customer">
+                                Klant notificeren via e-mail (indien beschikbaar)
+                            </label>
                         </div>
 
                         <div class="form-group full-width">
@@ -419,9 +430,72 @@
             const requiredFields = form.querySelectorAll('[required]');
             const fileInput = document.getElementById('bijlage');
             const filePreview = document.getElementById('filePreview');
-            const fileUploadArea = document.getElementById('fileUploadArea');
-            
-            // Voeg validatie styling toe
+            const fileUploadText = document.getElementById('fileUploadText');
+            const filesList = document.getElementById('filesList');
+
+            // Helper: re-render the current FileList into the UI list
+            function renderFileList() {
+                // Clear
+                filesList.innerHTML = '';
+                if (fileInput.files.length === 0) {
+                    filePreview.style.display = 'none';
+                    fileUploadText.textContent = 'Klik om bestanden te uploaden';
+                    return;
+                }
+                // Show list
+                filePreview.style.display = 'block';
+                Array.from(fileInput.files).forEach((file, index) => {
+                    const li = document.createElement('li');
+                    li.style.display = 'flex';
+                    li.style.alignItems = 'center';
+                    li.style.justifyContent = 'space-between';
+                    li.style.padding = '6px 8px';
+                    li.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
+                    li.style.fontSize = '14px';
+                    const name = document.createElement('span');
+                    name.textContent = file.name;
+                    const actions = document.createElement('div');
+                    actions.style.display = 'flex';
+                    actions.style.gap = '8px';
+
+                    // Preview icon if image
+                    if (file.type && file.type.startsWith('image/')) {
+                        const img = document.createElement('img');
+                        img.src = URL.createObjectURL(file);
+                        img.style.maxWidth = '60px';
+                        img.style.maxHeight = '60px';
+                        img.style.borderRadius = '6px';
+                        img.style.marginRight = '8px';
+                        name.prepend(img);
+                    }
+
+                    const removeBtn = document.createElement('button');
+                    removeBtn.type = 'button';
+                    removeBtn.textContent = 'Verwijderen';
+                    removeBtn.style.background = '#ef4444';
+                    removeBtn.style.color = 'white';
+                    removeBtn.style.border = 'none';
+                    removeBtn.style.padding = '6px 10px';
+                    removeBtn.style.borderRadius = '6px';
+                    removeBtn.style.cursor = 'pointer';
+                    removeBtn.onclick = function() {
+                        // Rebuild FileList excluding this index using DataTransfer
+                        const dt = new DataTransfer();
+                        Array.from(fileInput.files).forEach((f, i) => {
+                            if (i !== index) dt.items.add(f);
+                        });
+                        fileInput.files = dt.files;
+                        renderFileList();
+                    };
+
+                    actions.appendChild(removeBtn);
+                    li.appendChild(name);
+                    li.appendChild(actions);
+                    filesList.appendChild(li);
+                });
+            }
+
+            // Validatie styling voor verplichte velden
             requiredFields.forEach(field => {
                 field.addEventListener('blur', function() {
                     if (!this.value) {
@@ -435,29 +509,12 @@
             // Bestand upload preview
             fileInput.addEventListener('change', function() {
                 if (this.files.length > 0) {
-                    const file = this.files[0];
-                    
-                    // Toon bestandsnaam
-                    fileUploadArea.innerHTML = `
-                        <div style="text-align: center;">
-                            <div style="font-size: 2rem; color: #10b981;">✅</div>
-                            <div style="font-weight: 600; margin: 10px 0;">Bestand geselecteerd</div>
-                            <div style="color: #666;">${file.name}</div>
-                            <button type="button" onclick="resetFileInput()" style="margin-top: 10px; padding: 5px 10px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                                Verwijderen
-                            </button>
-                        </div>
-                    `;
-                    
-                    // Toon preview voor afbeeldingen
-                    if (file.type.startsWith('image/')) {
-                        const reader = new FileReader();
-                        reader.onload = function(e) {
-                            filePreview.innerHTML = `<img src="${e.target.result}" alt="Preview">`;
-                            filePreview.style.display = 'block';
-                        };
-                        reader.readAsDataURL(file);
-                    }
+                    // Show selected files count / names via renderFileList
+                    fileUploadText.textContent = `${this.files.length} bestand(en) geselecteerd`;
+                    renderFileList();
+                } else {
+                    filePreview.style.display = 'none';
+                    fileUploadText.textContent = 'Klik om bestanden te uploaden';
                 }
             });
 
@@ -477,29 +534,6 @@
                 }
             });
         });
-
-        // Functie om file input te resetten
-        function resetFileInput() {
-            const fileInput = document.getElementById('bijlage');
-            const filePreview = document.getElementById('filePreview');
-            const fileUploadArea = document.getElementById('fileUploadArea');
-            
-            fileInput.value = '';
-            filePreview.style.display = 'none';
-            filePreview.innerHTML = '';
-            
-            fileUploadArea.innerHTML = `
-                <input type="file" name="bijlage" id="bijlage" accept="image/*">
-                <label for="bijlage" class="file-upload-label">
-                    <div class="upload-icon">📷</div>
-                    <div>Klik om een foto te uploaden</div>
-                    <div style="font-size: 0.9rem; color: #666;">(Optioneel - JPG, PNG, etc.)</div>
-                </label>
-            `;
-            
-            // Herattach event listener
-            document.getElementById('bijlage').addEventListener('change', arguments.callee);
-        }
     </script>
 </body>
 </html>

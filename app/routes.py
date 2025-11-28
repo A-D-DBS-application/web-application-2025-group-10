@@ -1,7 +1,18 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session, Response, make_response
+import csv
+import io
+import os
+import smtplib
+from email.message import EmailMessage
+
 from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.utils import secure_filename       # <--- NIEUW
 from supabase import create_client
 from datetime import datetime, date
+import uuid                                      # <--- NIEUW
+import traceback                                 # <--- NIEUW for better debugging
+import base64  # <--- NIEUW
+
 
 main = Blueprint('main', __name__)
 
@@ -10,77 +21,79 @@ supabase_url = "https://kilpcevxhcwysfllheen.supabase.co"
 supabase_key = "sb_secret_Ft6fDkZhNVImBd_cgxFWZg_lCXrcbUa"
 supabase = create_client(supabase_url, supabase_key)
 
+# NIEUW: naam van je Storage bucket
+BUCKET_NAME = "bijlages"
+
+# Toggle: bestanden in DB opslaan i.p.v. Storage (let op: base64 in DB kan groot worden)
+STORE_FILES_IN_DB = True  # set to False to keep using Supabase Storage and store public URLs
+
+
 @main.route('/')
 def index():
     return redirect(url_for('main.login'))
 
 @main.route('/login', methods=['GET', 'POST'])
 def login():
-    if request.method == 'POST':
-        email = request.form.get('email')
-        password = request.form.get('password')
-        
-        if not email or not password:
-            flash('Vul alle velden in', 'error')
-            return render_template('login.html')
-        
-        try:
-            # Zoek gebruiker in de 'gebruiker' tabel
-            response = supabase.table("gebruiker").select("*").eq("email", email).execute()
-            
-            if response.data and len(response.data) > 0:
-                user_data = response.data[0]
-                stored_password = user_data.get('wachtwoord')
-                
-                # Eerst proberen met password hashing
-                if stored_password and check_password_hash(stored_password, password):
-                    # Login succesvol
-                    session['user_id'] = user_data['gebruiker_id']
-                    session['user_email'] = user_data['email']
-                    session['user_naam'] = user_data['naam']
-                    session['user_rol'] = user_data['rol']
-                    
-                    # Redirect naar dashboard voor Users, anders naar welkom pagina
-                    if session['user_rol'] == 'User':
-                        return redirect(url_for('main.user_dashboard'))
-                    else:
-                        user_info = {
-                            'naam': session['user_naam'],
-                            'email': session['user_email'],
-                            'rol': session['user_rol']
-                        }
-                        flash('Login succesvol!', 'success')
-                        return render_template('welkom.html', user=user_info)
-                # Als plain text (voor testing)
-                elif stored_password == password:
-                    session['user_id'] = user_data['gebruiker_id']
-                    session['user_email'] = user_data['email']
-                    session['user_naam'] = user_data['naam']
-                    session['user_rol'] = user_data['rol']
-                    
-                    # Redirect naar dashboard voor Users, anders naar welkom pagina
-                    if session['user_rol'] == 'User':
-                        return redirect(url_for('main.user_dashboard'))
-                    else:
-                        user_info = {
-                            'naam': session['user_naam'],
-                            'email': session['user_email'],
-                            'rol': session['user_rol']
-                        }
-                        flash('Login succesvol!', 'success')
-                        return render_template('welkom.html', user=user_info)
-                else:
-                    flash('Ongeldig wachtwoord', 'error')
-            else:
-                flash('Gebruiker niet gevonden', 'error')
-                
-        except Exception as e:
-            flash('Er ging iets mis bij het inloggen', 'error')
-            print(f"Login error: {e}")
-        
-        return render_template('login.html')
+	if request.method == 'POST':
+		email = request.form.get('email')
+		password = request.form.get('password')
+		
+		if not email or not password:
+			flash('Vul alle velden in', 'error')
+			return render_template('login.html')
+		
+		try:
+			# Zoek gebruiker in de 'gebruiker' tabel
+			response = supabase.table("gebruiker").select("*").eq("email", email).execute()
+			
+			if response.data and len(response.data) > 0:
+				user_data = response.data[0]
+				stored_password = user_data.get('wachtwoord')
+
+				if stored_password and check_password_hash(stored_password, password):
+					# Login succesvol
+					session['user_id'] = user_data['gebruiker_id']
+					session['user_email'] = user_data['email']
+					session['user_naam'] = user_data['naam']
+					# Normalize role display: Capitalise only first character (e.g., "Key user")
+					session['user_rol'] = (user_data.get('rol') or '').strip().capitalize()
+
+					# Redirect naar rol-specifieke dashboard (automatisch)
+					flash('Login succesvol!', 'success')
+					if session['user_rol'] == 'Admin':
+						return redirect(url_for('main.admin_dashboard'))
+					elif session['user_rol'] == 'Key user':
+						return redirect(url_for('main.keyuser_dashboard'))
+					else:
+						return redirect(url_for('main.user_dashboard'))
+
+				# Als plain text (voor testing)
+				elif stored_password == password:
+					session['user_id'] = user_data['gebruiker_id']
+					session['user_email'] = user_data['email']
+					session['user_naam'] = user_data['naam']
+					session['user_rol'] = (user_data.get('rol') or '').strip().capitalize()
+
+					# Redirect naar rol-specifieke dashboard (automatisch)
+					flash('Login succesvol!', 'success')
+					if session['user_rol'] == 'Admin':
+						return redirect(url_for('main.admin_dashboard'))
+					elif session['user_rol'] == 'Key user':
+						return redirect(url_for('main.keyuser_dashboard'))
+					else:
+						return redirect(url_for('main.user_dashboard'))
+				else:
+					flash('Ongeldig wachtwoord', 'error')
+			else:
+				flash('Gebruiker niet gevonden', 'error')
+				
+		except Exception as e:
+			flash('Er ging iets mis bij het inloggen', 'error')
+			print(f"Login error: {e}")
+		
+		return render_template('login.html')
     
-    return render_template('login.html')
+	return render_template('login.html')
 
 @main.route('/logout')
 def logout():
@@ -90,101 +103,238 @@ def logout():
 
 @main.route('/user/dashboard')
 def user_dashboard():
-    if 'user_id' not in session or session.get('user_rol') != 'User':
+    if 'user_id' not in session:
         flash('Toegang geweigerd', 'error')
         return redirect(url_for('main.login'))
-    
-    return render_template('user_dashboard.html')
+    role = normalized_role()
+    if role == 'Admin':
+        return redirect(url_for('main.admin_dashboard'))
+    elif role == 'Key user':
+        return redirect(url_for('main.keyuser_dashboard'))
+    else:
+        return render_template('user_dashboard.html')
 
 @main.route('/user/klachten')
 def user_klachten():
-    if 'user_id' not in session or session.get('user_rol') != 'User':
-        flash('Toegang geweigerd', 'error')
-        return redirect(url_for('main.login'))
-    
-    try:
-        # Haal klachten op die door deze user zijn aangemaakt
-        response = supabase.table("klacht").select("*").eq("vertegenwoordiger_id", session['user_id']).execute()
-        klachten = response.data if response.data else []
-        
-        return render_template('user_klachten.html', klachten=klachten)
-    except Exception as e:
-        flash('Er ging iets mis bij het ophalen van klachten', 'error')
-        print(f"Error: {e}")
-        return render_template('user_klachten.html', klachten=[])
+	if 'user_id' not in session:
+		flash('Toegang geweigerd', 'error')
+		return redirect(url_for('main.login'))
 
-@main.route('/user/klacht/<int:klacht_id>/verwijderen', methods=['POST'])
-def klacht_verwijderen(klacht_id):
-    if 'user_id' not in session or session.get('user_rol') != 'User':
-        flash('Toegang geweigerd', 'error')
-        return redirect(url_for('main.login'))
-    
-    try:
-        # 1. Eerst: Zoek de klacht en controleer of het van de huidige user is
-        klacht_response = supabase.table("klacht").select("vertegenwoordiger_id").eq("klacht_id", klacht_id).execute()
-        
-        if not klacht_response.data:
-            flash('Klacht niet gevonden', 'error')
-            return redirect(url_for('main.user_klachten'))
-        
-        klacht_data = klacht_response.data[0]
-        
-        # Controleer of de klacht van de huidige user is
-        if klacht_data['vertegenwoordiger_id'] != session['user_id']:
-            flash('Toegang geweigerd', 'error')
-            return redirect(url_for('main.user_klachten'))
-        
-        # 2. Verwijder de KLACHT
-        delete_klacht_response = supabase.table("klacht").delete().eq("klacht_id", klacht_id).execute()
-        
-        if delete_klacht_response.data:
-            flash('Klacht succesvol verwijderd!', 'success')
-        else:
-            flash('Er ging iets mis bij het verwijderen van de klacht', 'error')
-            
-    except Exception as e:
-        print(f"Verwijder error: {e}")
-        flash(f'Er ging iets mis bij het verwijderen: {str(e)}', 'error')
-    
-    return redirect(url_for('main.user_klachten'))
+	role = normalized_role()
+	try:
+		query = supabase.table("klacht").select("*")
+		if role == 'User':
+			# ensure integer id
+			try:
+				user_id_int = int(session['user_id'])
+			except Exception:
+				user_id_int = session['user_id']
+			query = query.eq("vertegenwoordiger_id", user_id_int)
+
+		response = query.execute()
+		# Check for errors explicitly
+		check_supabase_response(response, "fetching klachten")
+		klachten = response.data if response.data else []
+		print(f"DEBUG: user_klachten role={role}, found {len(klachten)} klachten")
+
+		# Apply filters from GET params
+		klant_id = request.args.get('klant_id')
+		categorie_id = request.args.get('categorie_id')
+		status = request.args.get('status')
+		date_from = request.args.get('date_from')
+		date_to = request.args.get('date_to')
+
+		if klant_id:
+			klachten = [k for k in klachten if str(k.get('klant_id')) == str(klant_id)]
+		if categorie_id:
+			klachten = [k for k in klachten if str(k.get('categorie_id')) == str(categorie_id)]
+		if status:
+			klachten = [k for k in klachten if k.get('status') == status]
+		if date_from:
+			klachten = [k for k in klachten if k.get('datum_melding') and str(k['datum_melding'])[:10] >= date_from]
+		if date_to:
+			klachten = [k for k in klachten if k.get('datum_melding') and str(k['datum_melding'])[:10] <= date_to]
+
+		categorieen_resp = supabase.table("probleemcategorie").select("categorie_id, type").execute()
+		check_supabase_response(categorieen_resp, "fetching probleemcategorie")
+		categorieen = categorieen_resp.data if categorieen_resp.data else []
+
+		klanten_resp = supabase.table("klant").select("klant_id, klantnaam").execute()
+		check_supabase_response(klanten_resp, "fetching klanten")
+		klanten = klanten_resp.data if klanten_resp.data else []
+
+		return render_template('user_klachten.html', klachten=klachten, categorieen=categorieen, klanten=klanten)
+	except Exception as e:
+		print(f"Exception in user_klachten: {e}")
+		flash('Er ging iets mis bij het ophalen van klachten', 'error')
+		return render_template('user_klachten.html', klachten=[])
+
+@main.route('/user/klachten/export')
+def klachten_export():
+	if 'user_id' not in session or not is_manager_role():
+		flash('Toegang geweigerd', 'error')
+		return redirect(url_for('main.user_klachten'))
+
+	role = normalized_role()
+	try:
+		# fetch and check
+		response = supabase.table("klacht").select("*").execute()
+		check_supabase_response(response, "export: fetching klachten")
+		klachten = response.data if response.data else []
+
+		# Apply filters
+		klant_id = request.args.get('klant_id')
+		categorie_id = request.args.get('categorie_id')
+		status = request.args.get('status')
+		date_from = request.args.get('date_from')
+		date_to = request.args.get('date_to')
+
+		if klant_id:
+			klachten = [k for k in klachten if str(k.get('klant_id')) == str(klant_id)]
+		if categorie_id:
+			klachten = [k for k in klachten if str(k.get('categorie_id')) == str(categorie_id)]
+		if status:
+			klachten = [k for k in klachten if k.get('status') == status]
+		if date_from:
+			klachten = [k for k in klachten if k.get('datum_melding') and str(k['datum_melding'])[:10] >= date_from]
+		if date_to:
+			klachten = [k for k in klachten if k.get('datum_melding') and str(k['datum_melding'])[:10] <= date_to]
+
+		# CSV build
+		output = io.StringIO()
+		writer = csv.writer(output)
+		header = ['klacht_id', 'vertegenwoordiger_id', 'klant_id', 'order_nummer', 'categorie_id', 'status', 'prioriteit', 'datum_melding']
+		writer.writerow(header)
+		for k in klachten:
+			writer.writerow([k.get('klacht_id'), k.get('vertegenwoordiger_id'), k.get('klant_id'), k.get('order_nummer'), k.get('categorie_id'), k.get('status'), k.get('prioriteit'), k.get('datum_melding')])
+
+		output.seek(0)
+		csv_data = output.getvalue()
+		response = make_response(csv_data)
+		response.headers['Content-Disposition'] = 'attachment; filename=klachten_export.csv'
+		response.headers['Content-Type'] = 'text/csv; charset=utf-8'
+		return response
+	except Exception as e:
+		print(f"Exception in klachten_export: {e}")
+		flash('Er ging iets mis bij het exporteren van klachten', 'error')
+		return redirect(url_for('main.user_klachten'))
 
 @main.route('/user/klacht/<int:klacht_id>/details')
 def klacht_details(klacht_id):
-    if 'user_id' not in session or session.get('user_rol') != 'User':
-        flash('Toegang geweigerd', 'error')
-        return redirect(url_for('main.login'))
-    
-    try:
-        # Controleer of de klacht van de huidige user is
-        klacht_response = supabase.table("klacht").select("*, klant:klant_id(klantnaam), categorie:probleemcategorie(type)").eq("klacht_id", klacht_id).execute()
-        
-        if not klacht_response.data:
-            flash('Klacht niet gevonden', 'error')
-            return redirect(url_for('main.user_klachten'))
-        
-        klacht_data = klacht_response.data[0]
-        
-        if klacht_data['vertegenwoordiger_id'] != session['user_id']:
-            flash('Toegang geweigerd', 'error')
-            return redirect(url_for('main.user_klachten'))
+	if 'user_id' not in session:
+		flash('Toegang geweigerd', 'error')
+		return redirect(url_for('main.login'))
 
-        # Haal categorieën op voor dropdown
-        categorieen_response = supabase.table("probleemcategorie").select("categorie_id, type").execute()
-        categorieen = categorieen_response.data if categorieen_response.data else []
-        
-        return render_template('klacht_details.html', 
-                             klacht=klacht_data,
-                             klacht_id=klacht_id,
-                             categorieen=categorieen)
-        
+	try:
+		klacht_response = supabase.table("klacht").select("*, klant:klant_id(klantnaam), categorie:probleemcategorie(type)").eq("klacht_id", klacht_id).execute()
+		check_supabase_response(klacht_response, "fetching single complaint")
+		if not klacht_response.data:
+			flash('Klacht niet gevonden', 'error')
+			return redirect(url_for('main.user_klachten'))
+		klacht_data = klacht_response.data[0]
+
+		if not can_view_klacht(klacht_data, session['user_id'], session.get('user_rol')):
+			flash('Toegang geweigerd', 'error')
+			return redirect(url_for('main.user_klachten'))
+
+		# status history and categories checks
+		sh_resp = supabase.table("statushistoriek").select("*").eq("klacht_id", klacht_id).order("datum_wijziging", {"ascending": False}).execute()
+		check_supabase_response(sh_resp, "status historiek")
+		statushistoriek = sh_resp.data if sh_resp.data else []
+
+		categorieen_response = supabase.table("probleemcategorie").select("categorie_id, type").execute()
+		check_supabase_response(categorieen_response, "fetching categories")
+		categorieen = categorieen_response.data if categorieen_response.data else []
+
+		vertegenw = []
+		if normalized_role() in ('Admin', 'Key user'):
+			reps_resp = supabase.table("gebruiker").select("gebruiker_id, naam").eq("rol", "User").execute()
+			check_supabase_response(reps_resp, "fetching reps")
+			vertegenw = reps_resp.data if reps_resp.data else []
+
+		# bijlages handling
+		# ...existing code...
+		return render_template('klacht_details.html', klacht=klacht_data, klacht_id=klacht_id, categorieen=categorieen, statushistoriek=statushistoriek, vertegenw=vertegenw)
+	except Exception as e:
+		print(f"Exception in klacht_details: {e}")
+		flash('Er ging iets mis bij het ophalen van de klacht details', 'error')
+		return redirect(url_for('main.user_klachten'))
+
+# Helper: upload one file to Supabase Storage OR store base64 in DB and return bijlage dict
+def upload_file_to_storage(file_obj, store_in_db=False):
+    if not file_obj or not getattr(file_obj, 'filename', None):
+        return None
+    try:
+        safe_name = secure_filename(file_obj.filename)
+        unique_id = str(uuid.uuid4())
+        unique_name = f"{unique_id}_{safe_name}"
+        content_type = getattr(file_obj, 'mimetype', 'application/octet-stream')
+        # Ensure pointer at start
+        try:
+            file_obj.stream.seek(0)
+        except Exception:
+            pass
+        file_bytes = file_obj.read()
+
+        if store_in_db:
+            # Store bytes as base64 inside bijlage JSON
+            b64 = base64.b64encode(file_bytes).decode('utf-8')
+            data_url = f"data:{content_type};base64,{b64}"
+            bijlage = {
+                "id": unique_id,
+                "naam": safe_name,
+                "content_type": content_type,
+                "content": b64,           # raw base64 stored in DB
+                "url": data_url,          # convenience for templates (data: URL)
+                "upload_date": datetime.utcnow().isoformat()
+            }
+            return bijlage
+        else:
+            # Upload to Supabase Storage
+            unique_name = f"{unique_id}_{safe_name}"
+            path_in_bucket = f"klachten/{unique_name}"
+            upload_response = supabase.storage.from_(BUCKET_NAME).upload(path_in_bucket, file_bytes)
+            file_url = f"{supabase_url}/storage/v1/object/public/{BUCKET_NAME}/{path_in_bucket}"
+            bijlage = {
+                "id": unique_id,
+                "url": file_url,
+                "naam": safe_name,
+                "content_type": content_type,
+                "upload_date": datetime.utcnow().isoformat()
+            }
+            return bijlage
     except Exception as e:
-        flash('Er ging iets mis bij het ophalen van de klacht details', 'error')
-        print(f"Error: {e}")
-        return redirect(url_for('main.user_klachten'))
+        print(f"Upload error: {e}")
+        traceback.print_exc()
+        return None
+
+# Helper: derive path in bucket from public URL and delete the object (no-op for data: urls)
+def delete_file_from_storage(file_url):
+    try:
+        if not file_url:
+            return None
+        # If this is a data-url (content in DB), skip deletion from Storage
+        if file_url.startswith('data:'):
+            # nothing to delete from Storage
+            return None
+        # Expect URL like: {supabase_url}/storage/v1/object/public/{BUCKET_NAME}/{path_in_bucket}
+        token = f"/{BUCKET_NAME}/"
+        if token in file_url:
+            path_in_bucket = file_url.split(token, 1)[1]
+            delete_resp = supabase.storage.from_(BUCKET_NAME).remove([path_in_bucket])
+            return delete_resp
+        else:
+            print(f"Could not parse path from URL: {file_url}")
+            return None
+    except Exception as e:
+        print(f"Delete storage error: {e}")
+        traceback.print_exc()
+        return None
 
 @main.route('/user/klacht/aanmaken', methods=['GET', 'POST'])
 def klacht_aanmaken():
-    if 'user_id' not in session or session.get('user_rol') != 'User':
+    # Allow Users, Key users and Admins to create complaints
+    if 'user_id' not in session or normalized_role() not in ('User', 'Key user', 'Admin'):
         flash('Toegang geweigerd', 'error')
         return redirect(url_for('main.login'))
     
@@ -209,8 +359,9 @@ def klacht_aanmaken():
             order_nummer = request.form.get('order_nummer', '').strip()
             mogelijke_oorzaak = request.form.get('mogelijke_oorzaak', '').strip()
             reden_afwijzing = request.form.get('reden_afwijzing', '').strip()
+            notify_customer = request.form.get('notify_customer') == 'on'
             
-            print(f"DEBUG - Form data ontvangen:")
+            print("DEBUG - Form data ontvangen:")
             print(f"  Klant ID: {klant_id}")
             print(f"  Categorie ID: {categorie_id}")
             print(f"  Ordernummer: {order_nummer}")
@@ -218,35 +369,63 @@ def klacht_aanmaken():
             # Valideer verplichte velden
             if not klant_id or not categorie_id or not order_nummer:
                 flash('Klant, categorie en ordernummer zijn verplicht', 'error')
-                return render_template('klacht_aanmaken.html', 
-                                     user_naam=session.get('user_naam'),
-                                     klanten=klanten,
-                                     categorieen=categorieen)
-            
-            # Bereid bijlagen voor
-            bijlages = {}
-            if 'bijlage' in request.files:
-                file = request.files['bijlage']
-                if file and file.filename != '' and file.filename != 'undefined':
-                    bijlages = {
-                        'filename': file.filename,
-                        'content_type': file.content_type or 'application/octet-stream',
-                        'upload_date': datetime.utcnow().isoformat(),
-                        'has_file': True
-                    }
-                    print(f"DEBUG - Bestand geüpload: {file.filename}")
-            
+                return render_template(
+                    'klacht_aanmaken.html',
+                    user_naam=session.get('user_naam'),
+                    klanten=klanten,
+                    categorieen=categorieen
+                )
+
+            # ================== AANGESCHERPT: meerdere bestanden verwerken ==================
+            bijlages = []
+            # Accept both 'bijlage' and 'bijlage[]' (some clients use bracketed names)
+            files = []
+            files += request.files.getlist('bijlage') or []
+            files += request.files.getlist('bijlage[]') or []
+            # Filter out empty file entries and deduplicate by filename+size
+            seen_key = set()
+            upload_count = 0
+            print(f"DEBUG - Received {len(files)} file objects (raw).")
+            filtered_files = []
+            for f in files:
+                if not f or not getattr(f, 'filename', None):
+                    continue
+                key = (f.filename, getattr(f, 'content_length', None) or f.content_type)
+                if key in seen_key:
+                    continue
+                seen_key.add(key)
+                filtered_files.append(f)
+            print(f"DEBUG - Filtered to {len(filtered_files)} unique files.")
+            # Safely upload each file
+            for f in files:
+                # keep loop over filtered list to ensure duplicates are not uploaded twice
+                pass
+            for f in filtered_files:
+                try:
+                    uploaded = upload_file_to_storage(f, store_in_db=STORE_FILES_IN_DB)
+                    if uploaded:
+                        bijlages.append(uploaded)
+                        upload_count += 1
+                        print(f"DEBUG - Uploaded file: {uploaded.get('naam')} ({uploaded.get('url')})")
+                except Exception as e:
+                    print(f"DEBUG - Error uploading file {f.filename}: {e}")
+
+            if not bijlages:
+                bijlages = None
+            print(f"DEBUG - Total uploaded bijlages: {len(bijlages) if bijlages else 0}")
+            # ================== EINDE AANGESCHERPT ==================
+
             # Alleen datum (zonder uur)
             vandaag = date.today().isoformat()
             
-            # Klacht aanmaken ZONDER status_platen
+            # Klacht aanmaken
             nieuwe_klacht = {
                 'vertegenwoordiger_id': session['user_id'],
                 'klant_id': int(klant_id),
                 'categorie_id': int(categorie_id),
-                'order_nummer': order_nummer,  # Ordernummer direct in klacht opslaan
+                'order_nummer': order_nummer,
                 'mogelijke_oorzaak': mogelijke_oorzaak or None,
-                'bijlages': bijlages,
+                'bijlages': bijlages,              # <--- hier komt de JSON in de tabel
                 'prioriteit': False,
                 'status': 'Ingediend',
                 'datum_melding': vandaag,
@@ -258,6 +437,21 @@ def klacht_aanmaken():
             response = supabase.table("klacht").insert(nieuwe_klacht).execute()
             
             if response.data:
+                # Notify GM or Sales manager if needed
+                # Simple notification: find all users with role Admin/Key user in same bedrijf
+                try:
+                    # send a very simple email
+                    if notify_customer:
+                        # Get klant details to email if present
+                        klant_email = None
+                        if klant_id:
+                            kresp = supabase.table("klant").select("email").eq("klant_id", int(klant_id)).execute()
+                            klant_email = kresp.data[0].get('email') if (kresp.data and kresp.data[0]) else None
+                        if klant_email:
+                            send_email("Uw klacht is aangemeld", f"Beste klant, uw klacht is aangemeld. Klacht ID: {response.data[0].get('klacht_id')}", [klant_email])
+                except Exception as e:
+                    print(f"Error sending notification: {e}")
+
                 flash('Klacht succesvol aangemaakt!', 'success')
                 return redirect(url_for('main.user_klachten'))
             else:
@@ -271,14 +465,203 @@ def klacht_aanmaken():
             flash(error_msg, 'error')
             print(f"ERROR - Exception: {str(e)}")
     
-    return render_template('klacht_aanmaken.html', 
-                         user_naam=session.get('user_naam'),
-                         klanten=klanten,
-                         categorieen=categorieen)
+    return render_template(
+        'klacht_aanmaken.html',
+        user_naam=session.get('user_naam'),
+        klanten=klanten,
+        categorieen=categorieen
+    )
+
+
+@main.route('/admin/dashboard')
+def admin_dashboard():
+    if 'user_id' not in session:
+        flash('Toegang geweigerd', 'error')
+        return redirect(url_for('main.login'))
+    if normalized_role() != 'Admin':
+        flash('Toegang geweigerd', 'error')
+        return redirect(url_for('main.user_dashboard'))
+    try:
+        klachten_resp = supabase.table("klacht").select("*").execute()
+        gebruikers_resp = supabase.table("gebruiker").select("gebruiker_id, naam, email, rol").execute()
+        klachten = klachten_resp.data if klachten_resp.data else []
+        gebruikers = gebruikers_resp.data if gebruikers_resp.data else []
+        total_klachten = len(klachten)
+        total_gebruikers = len(gebruikers)
+    except Exception as e:
+        print(f"Error admin stats: {e}")
+        total_klachten = 0
+        total_gebruikers = 0
+        gebruikers = []
+    return render_template('admin_dashboard.html', total_klachten=total_klachten, total_gebruikers=total_gebruikers, gebruikers=gebruikers)
+
+# Update role usage when creating users
+@main.route('/admin/users', methods=['POST'])
+def admin_create_user():
+    if 'user_id' not in session or not is_manager_role():
+        flash('Toegang geweigerd', 'error')
+        return redirect(url_for('main.user_dashboard'))
+    # form fields
+    naam = request.form.get('naam')
+    email = request.form.get('email')
+    rol = request.form.get('rol') or 'User'
+    wachtwoord = request.form.get('wachtwoord') or 'changeme'
+
+    if not naam or not email:
+        flash('Naam en email zijn verplicht', 'error')
+        return redirect(url_for('main.user_dashboard'))
+    try:
+        hashed = generate_password_hash(wachtwoord)
+        user_obj = {
+            'naam': naam,
+            'email': email,
+            'rol': (rol or '').strip().capitalize(),
+            'wachtwoord': hashed
+        }
+        resp = supabase.table("gebruiker").insert(user_obj).execute()
+        if resp.data:
+            flash('Gebruiker succesvol aangemaakt', 'success')
+        else:
+            flash('Fout bij aanmaken gebruiker', 'error')
+    except Exception as e:
+        print(f"Error creating user: {e}")
+        flash('Er ging iets mis bij het aanmaken van de gebruiker', 'error')
+    # Redirect to appropriate dashboard based on creator's role
+    if session.get('user_rol', '').upper() == 'ADMIN':
+        return redirect(url_for('main.admin_dashboard'))
+    elif session.get('user_rol', '').upper() == 'KEY USER':
+        return redirect(url_for('main.keyuser_dashboard'))
+    else:
+        return redirect(url_for('main.user_dashboard'))
+
+@main.route('/keyuser/klacht/<int:klacht_id>/toewijzen', methods=['POST'])
+def keyuser_assign_klacht(klacht_id):
+    role = normalized_role()
+    if 'user_id' not in session or role not in ('Key user','Admin'):
+        flash('Toegang geweigerd', 'error')
+        return redirect(url_for('main.login'))
+    try:
+        nieuwe_rep = request.form.get('vertegenwoordiger_id')
+        if not nieuwe_rep:
+            flash('Geen vertegenwoordiger geselecteerd', 'error')
+            return redirect(url_for('main.klacht_details', klacht_id=klacht_id))
+
+        # Check whether the selected user exists
+        new_rep_resp = supabase.table("gebruiker").select("*").eq("gebruiker_id", int(nieuwe_rep)).execute()
+        if not new_rep_resp.data:
+            flash('Gekozen vertegenwoordiger niet gevonden', 'error')
+            return redirect(url_for('main.klacht_details', klacht_id=klacht_id))
+        new_rep = new_rep_resp.data[0]
+
+        # Ensure target has role 'User' (vertegenwoordiger)
+        if new_rep.get('rol') != 'User':
+            flash('Selecteer een vertegenwoordiger (User)', 'error')
+            return redirect(url_for('main.klacht_details', klacht_id=klacht_id))
+
+        # perform the update - Key user can assign across companies
+        update_resp = supabase.table("klacht").update({
+            'vertegenwoordiger_id': int(nieuwe_rep),
+            'datum_laatst_bewerkt': datetime.utcnow().isoformat()
+        }).eq("klacht_id", klacht_id).execute()
+
+        if update_resp.data:
+            flash('Klacht succesvol toegewezen', 'success')
+        else:
+            flash('Fout bij toewijzen klacht', 'error')
+
+    except Exception as e:
+        print(f"Error assigning complaint: {e}")
+        traceback.print_exc()
+        flash('Er ging iets mis bij toewijzen', 'error')
+
+    return redirect(url_for('main.klacht_details', klacht_id=klacht_id))
+
+
+@main.route('/keyuser/dashboard')
+def keyuser_dashboard():
+    if 'user_id' not in session:
+        flash('Toegang geweigerd', 'error')
+        return redirect(url_for('main.login'))
+    if normalized_role() not in ('Key user', 'Admin'):
+        flash('Toegang geweigerd', 'error')
+        return redirect(url_for('main.user_dashboard'))
+    # Show all complaints and all representatives (no company scoping)
+    try:
+        reps_resp = supabase.table("gebruiker").select("gebruiker_id, naam, email").eq("rol", "User").execute()
+        vertegenw = reps_resp.data if reps_resp.data else []
+        klachten_resp = supabase.table("klacht").select("*, klant:klant_id(klantnaam), categorie:probleemcategorie(type)").order("datum_melding", {"ascending": False}).execute()
+        klachten = klachten_resp.data if klachten_resp.data else []
+        total_klachten = len(klachten)
+    except Exception as e:
+        print("Error getting keyuser stats:", e)
+        total_klachten = 0
+        vertegenw = []
+        klachten = []
+    return render_template('keyuser_dashboard.html', total_klachten=total_klachten, klachten=klachten, vertegenw=vertegenw)
+
+# Helper: return normalized role as "User", "Key user", "Admin"
+def normalized_role():
+    r = (session.get('user_rol') or '').strip()
+    if not r:
+        return ''
+    if r.lower().replace('-', ' ') in ('key user', 'keyuser'):
+        return 'Key user'
+    if r.lower() == 'admin':
+        return 'Admin'
+    if r.lower() == 'user':
+        return 'User'
+    return r.capitalize()
+
+# Use normalized_role in helpers
+def is_admin_role():
+    return normalized_role() == 'Admin'
+
+def is_manager_role():
+    return normalized_role() in ('Admin', 'Key user')
+
+def can_view_klacht(klacht, user_id, user_role):
+    role_norm = (user_role or '').strip().capitalize()
+    if role_norm == 'Admin':
+        return True
+    if role_norm == 'Key user':
+        return True
+    if role_norm == 'User':
+        return klacht.get('vertegenwoordiger_id') == user_id
+    return False
+
+def can_edit_klacht(klacht, user_id, user_role):
+    role_norm = (user_role or '').strip().capitalize()
+    if role_norm in ('Admin', 'Key user'):
+        return True
+    return klacht.get('vertegenwoordiger_id') == user_id
+
+# Simple send_email helper (will fallback to print; configure env for SMTP)
+def send_email(subject, body, to):
+    smtp_host = os.environ.get('SMTP_HOST')
+    smtp_port = int(os.environ.get('SMTP_PORT', 587))
+    smtp_user = os.environ.get('SMTP_USER')
+    smtp_pass = os.environ.get('SMTP_PASS')
+    if not smtp_host or not smtp_user or not smtp_pass:
+        print(f"[EMAIL] to={to} subject={subject} body={body}")
+        return False
+    try:
+        msg = EmailMessage()
+        msg['Subject'] = subject
+        msg['From'] = smtp_user
+        msg['To'] = to if isinstance(to, str) else ', '.join(to)
+        msg.set_content(body)
+        with smtplib.SMTP(smtp_host, smtp_port) as s:
+            s.starttls()
+            s.login(smtp_user, smtp_pass)
+            s.send_message(msg)
+        return True
+    except Exception as e:
+        print(f"Error sending email: {e}")
+        return False
 
 @main.route('/user/klacht/<int:klacht_id>/bewerken', methods=['POST'])
 def klacht_bewerken(klacht_id):
-    if 'user_id' not in session or session.get('user_rol') != 'User':
+    if 'user_id' not in session:
         flash('Toegang geweigerd', 'error')
         return redirect(url_for('main.login'))
     
@@ -290,7 +673,10 @@ def klacht_bewerken(klacht_id):
             flash('Klacht niet gevonden', 'error')
             return redirect(url_for('main.user_klachten'))
         
-        if klacht_check.data[0]['vertegenwoordiger_id'] != session['user_id']:
+        klacht_owner_id = klacht_check.data[0]['vertegenwoordiger_id']
+        # authorization: check if current user can edit this complaint
+        current_role = session.get('user_rol')
+        if not can_edit_klacht({'vertegenwoordiger_id': klacht_owner_id}, session['user_id'], current_role):
             flash('Toegang geweigerd', 'error')
             return redirect(url_for('main.user_klachten'))
 
@@ -299,7 +685,7 @@ def klacht_bewerken(klacht_id):
         categorie_id = request.form.get('categorie_id', '').strip()
         mogelijke_oorzaak = request.form.get('mogelijke_oorzaak', '').strip()
         reden_afwijzing = request.form.get('reden_afwijzing', '').strip()
-        # status_platen is verwijderd
+        vertegenwoordiger_id = request.form.get('vertegenwoordiger_id', '').strip()  # nieuw
 
         # Valideer categorie_id
         if not categorie_id:
@@ -312,18 +698,102 @@ def klacht_bewerken(klacht_id):
             flash('Ongeldige categorie geselecteerd', 'error')
             return redirect(url_for('main.klacht_details', klacht_id=klacht_id))
 
-        # Update de klacht (ZONDER status_platen)
+        # Haal bestaande klacht met bijlages
+        klacht_get_resp = supabase.table("klacht").select("bijlages").eq("klacht_id", klacht_id).execute()
+        existing_bijlages = []
+        if klacht_get_resp.data and len(klacht_get_resp.data) > 0:
+            existing_bijlages = klacht_get_resp.data[0].get('bijlages') or []
+        else:
+            existing_bijlages = []
+
+        # Defensive: zorg dat elke bestaande bijlage een id heeft
+        for bi, b in enumerate(existing_bijlages):
+            if isinstance(b, dict) and not b.get('id'):
+                existing_bijlages[bi] = {**b, 'id': str(uuid.uuid4())}
+            elif not isinstance(b, dict):
+                # unexpected format - skip or try convert
+                continue
+
+        # 1) Verwijder aangevinkte bijlages
+        deleted_ids_csv = request.form.get('deleted_bijlages', '')
+        deleted_ids = [x for x in deleted_ids_csv.split(',') if x.strip()] if deleted_ids_csv else []
+        if deleted_ids:
+            # filter out bijlages whose 'id' is in deleted_ids
+            to_remove = [b for b in existing_bijlages if str(b.get('id')) in deleted_ids]
+            # Attempt delete from storage for each
+            for b in to_remove:
+                if b.get('url'):
+                    delete_file_from_storage(b.get('url'))
+            # Keep only those not deleted
+            existing_bijlages = [b for b in existing_bijlages if str(b.get('id')) not in deleted_ids]
+
+        # 2) Upload nieuwe bijlages
+        new_files = request.files.getlist('new_bijlages')
+        if new_files:
+            for nf in new_files:
+                if nf and nf.filename:
+                    uploaded = upload_file_to_storage(nf, store_in_db=STORE_FILES_IN_DB)
+                    if uploaded:
+                        existing_bijlages.append(uploaded)
+
+        # Update object with nieuwe bijlages JSON
         update_data = {
             'order_nummer': order_nummer or None,
             'categorie_id': int(categorie_id),
             'mogelijke_oorzaak': mogelijke_oorzaak or None,
             'reden_afwijzing': reden_afwijzing or None,
-            'datum_laatst_bewerkt': datetime.utcnow().isoformat()
+            'datum_laatst_bewerkt': datetime.utcnow().isoformat(),
+            'bijlages': existing_bijlages if existing_bijlages else None
         }
+        # Alleen admin/key user kan vertegenwoordiger wijzigen
+        if session.get('user_rol') in ('Admin', 'Key user') and vertegenwoordiger_id:
+            update_data['vertegenwoordiger_id'] = int(vertegenwoordiger_id)
 
         response = supabase.table("klacht").update(update_data).eq("klacht_id", klacht_id).execute()
 
         if response.data:
+            # determine role normalized
+            role = normalized_role()
+            # capture old_status
+            try:
+                old_status_resp = supabase.table("klacht").select("status").eq("klacht_id", klacht_id).execute()
+                old_status = old_status_resp.data[0].get('status') if old_status_resp.data else None
+            except Exception:
+                old_status = None
+
+            status_in_form = request.form.get('status')
+            # Only allow managers to update status/prio
+            if status_in_form and is_manager_role():
+                update_data['status'] = status_in_form
+                # insert history
+                try:
+                    hist_obj = {
+                        'klacht_id': klacht_id,
+                        'oude_status': old_status,
+                        'nieuwe_status': status_in_form,
+                        'gewijzigd_door': session['user_id'],
+                        'opmerking': request.form.get('status_opmerking') or None,
+                        'datum_wijziging': datetime.utcnow().isoformat()
+                    }
+                    sh_resp = supabase.table("statushistoriek").insert(hist_obj).execute()
+                except Exception as e:
+                    print(f"Error inserting statushistoriek: {e}")
+
+                # On Goedgekeurd -> notify sales managers (rol Admin)
+                if status_in_form == 'Goedgekeurd':
+                    try:
+                        sm_resp = supabase.table("gebruiker").select("email").eq("rol", "Admin").execute()
+                        emails = [u['email'] for u in (sm_resp.data or []) if u.get('email')]
+                        if emails:
+                            send_email("Klacht Goedgekeurd", f"Klacht #{klacht_id} is goedgekeurd.", emails)
+                    except Exception as e:
+                        print(f"Error sending approve emails: {e}")
+
+            # prioriteit field logic maintained (only managers)
+            prioriteit_in_form = request.form.get('prioriteit')
+            if is_manager_role():
+                update_data['prioriteit'] = True if prioriteit_in_form else False
+
             flash('Klacht succesvol bijgewerkt!', 'success')
         else:
             error_msg = 'Er ging iets mis bij het bijwerken van de klacht'
@@ -337,3 +807,61 @@ def klacht_bewerken(klacht_id):
         flash(f'Er ging iets mis bij het bijwerken van de klacht: {str(e)}', 'error')
         print(f"Error: {e}")
         return redirect(url_for('main.klacht_details', klacht_id=klacht_id))
+
+@main.route('/user/klacht/<int:klacht_id>/verwijderen', methods=['POST'])
+def klacht_verwijderen(klacht_id):
+    if 'user_id' not in session:
+        flash('Toegang geweigerd', 'error')
+        return redirect(url_for('main.login'))
+
+    try:
+        # fetch complaint to verify permissions and attachments
+        kresp = supabase.table("klacht").select("*").eq("klacht_id", klacht_id).execute()
+        if not kresp.data:
+            flash('Klacht niet gevonden', 'error')
+            return redirect(url_for('main.user_klachten'))
+        klacht = kresp.data[0]
+
+        role = normalized_role()
+        # owner, admin or key user can delete
+        if not (role in ('Admin', 'Key user') or klacht.get('vertegenwoordiger_id') == session['user_id']):
+            flash('Toegang geweigerd', 'error')
+            return redirect(url_for('main.user_klachten'))
+
+        # attempt to delete any attachments from storage (safely)
+        for bijlage in (klacht.get('bijlages') or []):
+            url = None
+            try:
+                if isinstance(bijlage, dict):
+                    url = bijlage.get('url')
+                elif isinstance(bijlage, str):
+                    url = bijlage
+                if url:
+                    delete_file_from_storage(url)
+            except Exception as e:
+                print(f"Warning: error deleting attachment from storage: {e}")
+
+        # delete complaint
+        del_resp = supabase.table("klacht").delete().eq("klacht_id", klacht_id).execute()
+        if del_resp.error:
+            flash('Fout bij verwijderen klacht', 'error')
+        else:
+            flash('Klacht verwijderd', 'success')
+    except Exception as e:
+        print(f"Error deleting complaint: {e}")
+        flash('Er ging iets mis bij verwijderen', 'error')
+
+    return redirect(url_for('main.user_klachten'))
+
+def check_supabase_response(resp, ctx=""):
+	"""Check supabase response for errors and raise if present (or return data)."""
+	if resp is None:
+		raise Exception(f"Empty response from Supabase at {ctx}")
+	# supabase-python response has .error attribute; sometimes None, sometimes dict
+	err = getattr(resp, 'error', None)
+	if err:
+		# try extract message if present
+		msg = err.message if hasattr(err, 'message') else repr(err)
+		print(f"Supabase error in {ctx}: {msg}")
+		raise Exception(f"Supabase error in {ctx}: {msg}")
+	return resp

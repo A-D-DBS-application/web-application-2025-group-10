@@ -142,16 +142,68 @@
             border-radius: 6px;
             border: 1px solid #e5e7eb;
         }
+        /* NIEUW: styling voor bijlage-afbeelding */
+        .attachment-image {
+            max-width: 250px;
+            max-height: 250px;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+            display: block;
+            margin-bottom: 8px;
+        }
+        .attachment-filename {
+            font-size: 13px;
+            color: #4b5563;
+        }
+        .attachment-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        .attachment-meta {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .attachment-actions {
+            margin-left: auto;
+            display: flex;
+            gap: 8px;
+        }
+        .deleted-attachment {
+            opacity: 0.45;
+            text-decoration: line-through;
+            border-color: #fca5a5;
+            background: #fff7f7;
+        }
+        .delete-btn, .undo-btn {
+            background: #ef4444;
+            color: white;
+            border: none;
+            padding: 6px 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 13px;
+        }
+        .delete-btn:hover { background: #dc2626; }
+        .undo-btn {
+            background: #6b7280;
+        }
+        .undo-btn:hover { background: #4b5563; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <a href="{{ url_for('main.user_klachten') }}" class="back-button">← Terug naar Mijn Klachten</a>
-            <h1>Klacht Details #{{ klacht_id }}</h1>
+            <h1>Klacht Details #{{ klacht_id }} — Rol: {{ session.get('user_rol') }}</h1>
         </div>
 
-        <form method="POST" action="{{ url_for('main.klacht_bewerken', klacht_id=klacht_id) }}">
+        <!-- add enctype and a placeholder for CSRF token -->
+        <form method="POST" action="{{ url_for('main.klacht_bewerken', klacht_id=klacht_id) }}" enctype="multipart/form-data">
+            <!-- suggest the app include a CSRF token if used -->
             <div class="details-card">
                 <!-- Niet-bewerkbare velden -->
                 <div class="detail-row">
@@ -166,7 +218,11 @@
                     <div class="detail-value">
                         <div class="readonly-field">
                             {% if klacht.datum_melding %}
-                                {{ klacht.datum_melding.split('T')[0] }}
+                                {% if 'T' in klacht.datum_melding %}
+                                    {{ klacht.datum_melding.split('T')[0] }}
+                                {% else %}
+                                    {{ klacht.datum_melding[:10] if klacht.datum_melding|length >= 10 else klacht.datum_melding }}
+                                {% endif %}
                             {% else %}
                                 Onbekend
                             {% endif %}
@@ -214,7 +270,99 @@
                     </div>
                 </div>
 
+                <!-- NIEUW: Bijlage tonen (indien aanwezig) -->
+                {% if klacht.bijlages %}
+                    <div class="detail-row">
+                        <div class="detail-label">Bijlagen:</div>
+                        <div class="detail-value">
+                            <div id="bijlages-list">
+                                {% for bijlage in klacht.bijlages %}
+                                    {# Defensive extraction of values so template won't crash if keys are missing #}
+                                    {% set bijlage_id = bijlage.get('id') if bijlage is mapping and bijlage.get('id') else loop.index %}
+                                    {% set bijlage_url = bijlage.get('url') if bijlage is mapping and bijlage.get('url') else (bijlage if bijlage is string else '') %}
+                                    {% set bijlage_naam = bijlage.get('naam') if bijlage is mapping and bijlage.get('naam') else (bijlage_url.split('/')[-1] if bijlage_url and bijlage_url is string and '/' in bijlage_url else ('bijlage_' ~ loop.index)) %}
+                                    {% set is_image = bijlage.get('is_image') if bijlage is mapping and bijlage.get('is_image') is not none else (bijlage_url.startswith('data:image') if bijlage_url else False) %}
+                                    <div class="attachment-row" id="bijlage-row-{{ bijlage_id }}">
+                                        <a href="{{ bijlage_url }}" target="_blank" aria-label="Open bijlage {{ bijlage_naam }}">
+                                            {% if is_image %}
+                                                 <img src="{{ bijlage_url }}" alt="{{ bijlage_naam }}" class="attachment-image">
+                                             {% else %}
+                                                 <img src="/static/icons/file-icon.png" alt="Bestand {{ bijlage_naam }}" class="attachment-image">
+                                             {% endif %}
+                                        </a>
+                                        <div class="attachment-meta">
+                                            <div class="attachment-filename">{{ bijlage_naam }}</div>
+                                            <div style="font-size: 12px; color: #6b7280;">Klik om te openen in nieuw tabblad.</div>
+                                        </div>
+                                        <div class="attachment-actions">
+                                            <button type="button" class="delete-btn" onclick="toggleDelete('{{ bijlage_id }}')">Verwijderen</button>
+                                            <button type="button" class="undo-btn" style="display:none;" onclick="toggleDelete('{{ bijlage_id }}', true)">Ongedaan</button>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                {% endif %}
+
+                <!-- Nieuw uploadveld voor bijlagen -->
+                <div class="detail-row">
+                    <label class="detail-label" for="new_bijlages">Nieuwe Bijlages:</label>
+                    <div class="detail-value">
+                        <input id="new_bijlages" name="new_bijlages" type="file" accept="image/*,application/pdf" multiple class="edit-input">
+                        <div style="font-size: 13px; color: #6b7280; margin-top: 6px;">Accepteert afbeeldingen en PDF-bestanden. Max grootte afhankelijk van de serverinstellingen.</div>
+                    </div>
+                </div>
+
+                <!-- Hidden field to store deleted bijlage ids -->
+                <input type="hidden" name="deleted_bijlages" id="deleted_bijlages" value="">
+
                 <!-- Bewerkbare velden -->
+                <!-- Status bewerken (alleen voor managers/admin) -->
+                {% if session.get('user_rol') in ['Admin', 'Key user'] %}
+                <div class="detail-row">
+                    <div class="detail-label">Status Acties:</div>
+                    <div class="detail-value">
+                        <div style="display:flex; gap:8px; align-items:center;">
+                            <select name="status" class="edit-select">
+                                <option value="">—Wijzig status—</option>
+                                <option value="Ingediend">Ingediend</option>
+                                <option value="Goedgekeurd">Goedgekeurd</option>
+                                <option value="Afgewezen">Afgewezen</option>
+                                <option value="In behandeling">In behandeling</option>
+                                <option value="Afgehandeld">Afgehandeld</option>
+                            </select>
+                            <label style="display:flex;align-items:center;gap:6px;">
+                                <input type="checkbox" name="prioriteit" {% if klacht.prioriteit %}checked{% endif %}>
+                                Prioriteit
+                            </label>
+                        </div>
+                        <div style="margin-top:8px;">
+                            <label for="status_opmerking">Opmerking:</label>
+                            <input type="text" name="status_opmerking" class="edit-input" placeholder="Korte opmerking...">
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Toewijzen aan Vertegenwoordiger (manager/admin) -->
+                {% if session.get('user_rol') in ['Admin', 'Key user'] and vertegenw %}
+                <div class="detail-row">
+                    <div class="detail-label">Toewijzen aan:</div>
+                    <div class="detail-value">
+                        <form action="{{ url_for('main.keyuser_assign_klacht', klacht_id=klacht_id) }}" method="POST" style="display:flex; gap:8px; align-items:center;">
+                            <select name="vertegenwoordiger_id" class="edit-select" required>
+                                <option value="">Selecteer vertegenwoordiger</option>
+                                {% for r in vertegenw %}
+                                    <option value="{{ r.gebruiker_id }}" {% if klacht.vertegenwoordiger_id == r.gebruiker_id %}selected{% endif %}>{{ r.naam }}</option>
+                                {% endfor %}
+                            </select>
+                            <button type="submit" class="save-btn">Toewijzen</button>
+                        </form>
+                    </div>
+                </div>
+                {% endif %}
+
                 <div class="detail-row">
                     <div class="detail-label">Ordernummer:</div>
                     <div class="detail-value">
@@ -259,6 +407,77 @@
                 </div>
             </div>
         </form>
+        <!-- Status historie (alle gebruikers kunnen zien) -->
+        <div class="details-card" style="margin-top: 20px;">
+            <h2>Status Historiek</h2>
+            {% if statushistoriek %}
+                <ul style="list-style:none; padding-left:0;">
+                {% for sh in statushistoriek %}
+                    <li style="padding:8px 0; border-bottom:1px solid #e5e7eb;">
+                        <strong>{{ sh.datum_wijziging.split('T')[0] }} {{ sh.datum_wijziging.split('T')[1][:8] if sh.datum_wijziging and 'T' in sh.datum_wijziging else '' }}</strong>
+                        — {{ sh.oude_status }} → {{ sh.nieuwe_status }}
+                        {% if sh.opmerking %}<div style="color:#6b7280; font-size:13px;">{{ sh.opmerking }}</div>{% endif %}
+                    </li>
+                {% endfor %}
+                </ul>
+            {% else %}
+                <div style="color:#6b7280;">Nog geen wijzigingen</div>
+            {% endif %}
+        </div>
     </div>
+
+    <!-- JavaScript: toggling deletion state and update hidden field -->
+    <script>
+        function toggleDelete(bijlageId, forceUndo) {
+            const row = document.getElementById('bijlage-row-' + bijlageId);
+            if (!row) return;
+            const deleteBtn = row.querySelector('.delete-btn');
+            const undoBtn = row.querySelector('.undo-btn');
+            const hidden = document.getElementById('deleted_bijlages');
+
+            // Determine new state
+            const alreadyDeleted = row.classList.contains('deleted-attachment');
+            let newDeletedState = forceUndo ? false : !alreadyDeleted;
+
+            // Update UI
+            if (newDeletedState) {
+                row.classList.add('deleted-attachment');
+                deleteBtn.style.display = 'none';
+                undoBtn.style.display = 'inline-block';
+            } else {
+                row.classList.remove('deleted-attachment');
+                deleteBtn.style.display = 'inline-block';
+                undoBtn.style.display = 'none';
+            }
+
+            // Update hidden field: keep unique CSV of IDs
+            const current = hidden.value ? hidden.value.split(',').filter(Boolean) : [];
+            const idx = current.indexOf(String(bijlageId));
+            if (newDeletedState && idx === -1) {
+                current.push(String(bijlageId));
+            } else if (!newDeletedState && idx !== -1) {
+                current.splice(idx, 1);
+            }
+            hidden.value = current.join(',');
+        }
+
+        // Optional: confirm before form submit if attachments marked for deletion
+        (function() {
+            const form = document.querySelector('form[enctype="multipart/form-data"]');
+            if (!form) return;
+            form.addEventListener('submit', function(e) {
+                const hidden = document.getElementById('deleted_bijlages');
+                if (hidden && hidden.value) {
+                    // Confirm that the user wants to delete the marked attachments
+                    const confirmed = confirm('Er zijn bijlagen gemarkeerd om te verwijderen. Weet u zeker dat u verder wilt gaan?');
+                    if (!confirmed) {
+                        e.preventDefault();
+                        return false;
+                    }
+                }
+                // Proceed: submission will include deleted_bijlages and new_bijlages fields
+            });
+        })();
+    </script>
 </body>
 </html>

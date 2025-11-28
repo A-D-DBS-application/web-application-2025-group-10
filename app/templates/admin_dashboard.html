@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #23533e; color: white; padding: 20px; }
+        .container { max-width: 1000px; margin: 0 auto; }
+        .header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
+        .card { background: white; color: #1f2937; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+        .grid { display:grid; grid-template-columns: 1fr 1fr; gap:20px; }
+        .button { background:#10b981; color:white; padding:10px 16px; border-radius:8px; text-decoration:none; display:inline-block; }
+        table { width:100%; border-collapse: collapse; background: white; color: #1f2937; border-radius: 8px; overflow: hidden; }
+        th, td { padding: 8px 12px; border-bottom: 1px solid #e5e7eb; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Admin Dashboard</h1>
+            <div><a href="{{ url_for('main.logout') }}" class="button">Uitloggen</a></div>
+        </div>
+        <div class="grid">
+            <div class="card">
+                <h2>Overzicht</h2>
+                <p>Totaal gebruikers: <strong>{{ total_gebruikers }}</strong></p>
+                <p>Totaal klachten: <strong>{{ total_klachten }}</strong></p>
+            </div>
+            <div class="card">
+                <h2>Acties</h2>
+                <p><a href="{{ url_for('main.klacht_aanmaken') }}" class="button">Nieuwe Klacht</a></p>
+                <p><a href="{{ url_for('main.user_klachten') }}" class="button">Bekijk Alle Klachten</a></p>
+                <p><a href="{{ url_for('main.klachten_export') }}" class="button">Export (CSV)</a></p>
+            </div>
+        </div>
+
+        <div style="margin-top:20px;">
+            <div class="card">
+                <h3>Gebruikersbeheer</h3>
+                <table>
+                    <thead><tr><th>ID</th><th>Naam</th><th>Email</th><th>Rol</th></tr></thead>
+                    <tbody>
+                        {% for u in gebruikers %}
+                        <tr>
+                            <td>{{ u.gebruiker_id }}</td>
+                            <td>{{ u.naam }}</td>
+                            <td>{{ u.email }}</td>
+                            <td>{{ u.rol }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                <div style="margin-top:12px;">
+                    <form action="{{ url_for('main.admin_create_user') }}" method="POST" style="display:flex; gap:8px; align-items:center;">
+                        <input name="naam" placeholder="Naam" required>
+                        <input name="email" placeholder="Email" required>
+                        <select name="rol">
+                            <option value="User">User</option>
+                            <option value="Key user">Key user</option>
+                            <option value="Admin">Admin</option>
+                        </select>
+                        <input name="wachtwoord" placeholder="Wachtwoord">
+                        <button type="submit" class="button">Creëer gebruiker</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

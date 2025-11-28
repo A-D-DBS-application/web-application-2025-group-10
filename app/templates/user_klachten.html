@@ -166,6 +166,36 @@
             <h1>Mijn Klachten</h1>
         </div>
 
+        <!-- Filters: visible to managers/admin and general users (user filters apply to own) -->
+        <form method="GET" style="margin-bottom: 12px; display:flex; gap:10px; align-items:center;">
+            <select name="klant_id">
+                <option value="">Alle klanten</option>
+                {% for klant in klanten %}
+                    <option value="{{ klant.klant_id }}" {% if request.args.get('klant_id') == str(klant.klant_id) %}selected{% endif %}>{{ klant.klantnaam }}</option>
+                {% endfor %}
+            </select>
+            <select name="categorie_id">
+                <option value="">Alle categorieën</option>
+                {% for categorie in categorieen %}
+                    <option value="{{ categorie.categorie_id }}" {% if request.args.get('categorie_id') == str(categorie.categorie_id) %}selected{% endif %}>{{ categorie.type }}</option>
+                {% endfor %}
+            </select>
+            <select name="status">
+                <option value="">Alle statussen</option>
+                <option value="Ingediend" {% if request.args.get('status') == 'Ingediend' %}selected{% endif %}>Ingediend</option>
+                <option value="Goedgekeurd" {% if request.args.get('status') == 'Goedgekeurd' %}selected{% endif %}>Goedgekeurd</option>
+                <option value="Afgewezen" {% if request.args.get('status') == 'Afgewezen' %}selected{% endif %}>Afgewezen</option>
+                <option value="In behandeling" {% if request.args.get('status') == 'In behandeling' %}selected{% endif %}>In behandeling</option>
+                <option value="Afgehandeld" {% if request.args.get('status') == 'Afgehandeld' %}selected{% endif %}>Afgehandeld</option>
+            </select>
+            <input type="date" name="date_from" value="{{ request.args.get('date_from') or '' }}">
+            <input type="date" name="date_to" value="{{ request.args.get('date_to') or '' }}">
+            <button type="submit" class="action-link">Filter</button>
+            {% if session.get('user_rol') in ['Admin', 'Key user'] %}
+                <a href="{{ url_for('main.klachten_export', **request.args.to_dict()) }}" class="action-link" style="margin-left:8px">📥 Export CSV</a>
+            {% endif %}
+        </form>
+
         <div class="flash-messages">
             {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
@@ -193,7 +223,12 @@
                         <td><strong>#{{ klacht.klacht_id }}</strong></td>
                         <td>
                             {% if klacht.datum_melding %}
-                                {{ klacht.datum_melding.split('T')[0] }}
+                                {# if datum string has T, show date-part, else show first 10 chars or the whole value #}
+                                {% if 'T' in klacht.datum_melding %}
+                                    {{ klacht.datum_melding.split('T')[0] }}
+                                {% else %}
+                                    {{ klacht.datum_melding[:10] if klacht.datum_melding|length >= 10 else klacht.datum_melding }}
+                                {% endif %}
                             {% else %}
                                 Onbekend
                             {% endif %}

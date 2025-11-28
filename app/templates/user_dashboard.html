@@ -122,6 +122,7 @@
     <div class="container">
         <div class="header">
             <h1>USER DASHBOARD</h1>
+            <div style="font-size:0.9rem; color: #d1fbe4; margin-top: 6px;">Rol: {{ session.get('user_rol') }}</div>
         </div>
 
         <div class="flash-messages">
@@ -147,6 +148,8 @@
                 <p>Bekijk je klachten</p>
             </a>
         </div>
+
+        <!-- Note: This is the User (vertegenwoordiger) dashboard. Managers/Admins should use the dedicated dashboards. -->
 
         <a href="{{ url_for('main.logout') }}" class="logout-btn">
             Uitloggen

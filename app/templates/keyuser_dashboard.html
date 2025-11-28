@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <title>Key user Dashboard</title>
+    <style>
+        /* Minimal styling — reuse existing CSS classes if necessary */
+        body { font-family: Arial, sans-serif; background: #23533e; color: white; padding: 20px; }
+        .container { max-width: 1000px; margin: 0 auto; }
+        .header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
+        .card { background: white; color: #1f2937; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+        .grid { display:grid; grid-template-columns: 1fr 1fr; gap:20px; }
+        .button { background:#10b981; color:white; padding:10px 16px; border-radius:8px; text-decoration:none; display:inline-block; }
+        .table { width: 100%; border-collapse: collapse; background: white; color: #1f2937; border-radius: 8px; overflow:hidden; }
+        .table th, .table td { padding: 10px; border-bottom: 1px solid #e5e7eb; text-align:left; }
+        .small-form { display:inline-flex; gap:8px; align-items:center; }
+        .select-small { padding: 6px 8px; border-radius:6px; }
+        .assign-btn { background:#0f5f1d; color:white; padding:6px 12px; border-radius:6px; border:none; cursor:pointer; }
+        .assign-btn:hover { background:#0d5b19; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Key user Dashboard</h1>
+            <div><a href="{{ url_for('main.logout') }}" class="button">Uitloggen</a></div>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <h2>Bedrijfs-klachten</h2>
+                <p>Totaal klachten in uw productiebedrijf: <strong>{{ total_klachten }}</strong></p>
+                <p>
+                    <a href="{{ url_for('main.klacht_aanmaken') }}" class="button">Nieuwe Klacht</a>
+                    <a href="{{ url_for('main.klachten_export') }}" class="button">Export (CSV)</a>
+                </p>
+            </div>
+            <div class="card">
+                <h2>Acties</h2>
+                <p><a href="{{ url_for('main.user_klachten') }}" class="button">Bekijk Klachten</a></p>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top:20px;">
+            <h3>Klachten overzicht</h3>
+            {% if klachten %}
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Datum</th>
+                        <th>Klant</th>
+                        <th>Status</th>
+                        <th>Prioriteit</th>
+                        <th>Vertegenwoordiger</th>
+                        <th>Acties</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for k in klachten %}
+                    <tr>
+                        <td>#{{ k.klacht_id }}</td>
+                        <td>{{ k.datum_melding.split('T')[0] if k.datum_melding }}</td>
+                        <td>{{ k.klant.klantnaam if k.klant }}</td>
+                        <td><span class="status-badge status-{{ k.status.replace(' ', '') }}">{{ k.status }}</span></td>
+                        <td>{% if k.prioriteit %}<span class="priority-high">Hoog</span>{% else %}<span class="priority-normal">Normaal</span>{% endif %}</td>
+                        <td>{{ k.vertegenwoordiger_id }}</td>
+                        <td>
+                            <a href="{{ url_for('main.klacht_details', klacht_id=k.klacht_id) }}" class="action-link">ℹ️</a>
+                            <form action="{{ url_for('main.manager_assign_klacht', klacht_id=k.klacht_id) }}" method="POST" class="small-form" style="display:inline-block; margin-left:8px;">
+                                <select name="vertegenwoordiger_id" class="select-small" required>
+                                    <option value="">Kies vertegenwoordiger</option>
+                                    {% for r in vertegenw %}
+                                        <option value="{{ r.gebruiker_id }}">{{ r.naam }}</option>
+                                    {% endfor %}
+                                </select>
+                                <button type="submit" class="assign-btn">Toewijzen</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p>Geen klachten gevonden binnen uw bedrijf.</p>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>

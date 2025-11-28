@@ -17,7 +17,7 @@
     <div class="user-info">
         <p><strong>Naam:</strong> {{ user.naam }}</p>
         <p><strong>Email:</strong> {{ user.email }}</p>
-        <p><strong>Rol:</strong> {{ user.rol }}</p>
+        <p><strong>Rol:</strong> {{ session.get('user_rol') }}</p>
     </div>
     
     <a href="{{ url_for('main.logout') }}" class="logout">Uitloggen</a>
