@@ -32,7 +32,7 @@ class Gebruiker(db.Model):
     email = db.Column(db.Text, nullable=False, unique=True)
     rol = db.Column(gebruikersrol_enum, nullable=False)
     wachtwoord = db.Column(db.Text, nullable=False)
-    telefoon = db.Column(db.SmallInteger)
+    telefoon = telefoon = db.Column(db.Text)
     productiebedrijf_id = db.Column(db.Integer, db.ForeignKey('productiebedrijf.productiebedrijf_id', onupdate='CASCADE'))
 
 
@@ -48,7 +48,7 @@ class Klant(db.Model):
     klantnaam = db.Column(db.Text, nullable=False)
     contactpersoon = db.Column(db.Text)
     email = db.Column(db.Text)
-    telefoon = db.Column(db.SmallInteger)
+    telefoon = telefoon = db.Column(db.Text)
 
     # Relaties naar orders en klachten
     orders = db.relationship('Order', backref='klant', lazy=True)
