@@ -532,19 +532,78 @@ def admin_dashboard():
     if normalized_role() != 'Admin':
         flash('Toegang geweigerd', 'error')
         return redirect(url_for('main.user_dashboard'))
+
     try:
-        klachten_resp = supabase.table("klacht").select("*").execute()
-        gebruikers_resp = supabase.table("gebruiker").select("gebruiker_id, naam, email, rol").execute()
-        klachten = klachten_resp.data if klachten_resp.data else []
-        gebruikers = gebruikers_resp.data if gebruikers_resp.data else []
+        # Fetch representatives and all users for mapping (admins want to see all creators)
+        reps_resp = supabase.table("gebruiker").select("gebruiker_id, naam, email").execute()
+        check_supabase_response(reps_resp, "fetching all users")
+        vertegenw = reps_resp.data if reps_resp.data else []
+
+        # Build a quick map id -> naam for fallback usage
+        rep_map = {r['gebruiker_id']: r['naam'] for r in vertegenw if r.get('gebruiker_id') is not None}
+
+        # Try relational select for open klachten (exclude 'Afgehandeld') and order by prioriteit desc, datum_melding desc
+        klachten = []
+        try:
+            klachten_resp = supabase.table("klacht").select(
+                "*, klant:klant_id(klantnaam), categorie:probleemcategorie(type), vertegenwoordiger:vertegenwoordiger_id(naam)"
+            ).neq("status", "Afgehandeld").order("prioriteit", {"ascending": False}).order("datum_melding", {"ascending": False}).execute()
+            check_supabase_response(klachten_resp, "fetching open klachten for admin with relations")
+            klachten = klachten_resp.data if klachten_resp.data else []
+        except Exception as e:
+            # Fallback: fetch all, filter and sort locally
+            print(f"Warning: relational select for admin klachten failed: {e}")
+            traceback.print_exc()
+            fallback_resp = supabase.table("klacht").select("*").execute()
+            check_supabase_response(fallback_resp, "fetching klachten fallback for admin")
+            raw_klachten = fallback_resp.data if fallback_resp.data else []
+            filtered = [k for k in raw_klachten if (k.get('status') or '').strip() != 'Afgehandeld']
+            # Map representative name into each complaint
+            for k in filtered:
+                if not k.get('vertegenwoordiger'):
+                    rep_id = k.get('vertegenwoordiger_id')
+                    if rep_id and rep_id in rep_map:
+                        k['vertegenwoordiger'] = {'naam': rep_map.get(rep_id)}
+                    else:
+                        k['vertegenwoordiger'] = None
+            try:
+                # Sort by priority then date desc
+                filtered_sorted = sorted(filtered, key=lambda x: (0 if bool(x.get('prioriteit')) else 1), reverse=False)
+                filtered_sorted = sorted(filtered_sorted, key=lambda x: (x.get('datum_melding') or ''), reverse=True)
+                klachten = filtered_sorted
+            except Exception:
+                klachten = sorted(filtered, key=lambda x: (0 if bool(x.get('prioriteit')) else 1), reverse=False)
+
+        # Ensure each result has representative object
+        for k in klachten:
+            if not k.get('vertegenwoordiger'):
+                rep_id = k.get('vertegenwoordiger_id')
+                if rep_id and rep_id in rep_map:
+                    k['vertegenwoordiger'] = {'naam': rep_map.get(rep_id)}
+                else:
+                    k['vertegenwoordiger'] = None
+
         total_klachten = len(klachten)
+
+        # Also fetch the users and counts for the admin user-management card
+        gebruikers_resp = supabase.table("gebruiker").select("gebruiker_id, naam, email, rol").execute()
+        check_supabase_response(gebruikers_resp, "fetching users for admin")
+        gebruikers = gebruikers_resp.data if gebruikers_resp.data else []
         total_gebruikers = len(gebruikers)
     except Exception as e:
         print(f"Error admin stats: {e}")
+        traceback.print_exc()
         total_klachten = 0
         total_gebruikers = 0
         gebruikers = []
-    return render_template('admin_dashboard.html', total_klachten=total_klachten, total_gebruikers=total_gebruikers, gebruikers=gebruikers)
+        vertegenw = []
+        klachten = []
+
+    # Defensive: ensure klachten is a list
+    if not isinstance(klachten, list):
+        klachten = list(klachten) if klachten else []
+
+    return render_template('admin_dashboard.html', total_klachten=total_klachten, total_gebruikers=total_gebruikers, gebruikers=gebruikers, klachten=klachten, vertegenw=vertegenw)
 
 # Update role usage when creating users
 @main.route('/admin/users', methods=['POST'])

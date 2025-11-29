@@ -65,6 +65,62 @@
                 </div>
             </div>
         </div>
+
+        <!-- NIEUW: Klachten overzicht (zelfde als Key user) -->
+        <div style="margin-top:20px;">
+            <div class="card">
+                <h3>Klachten overzicht</h3>
+                {% if klachten %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Datum</th>
+                            <th>Klant</th>
+                            <th>Status</th>
+                            <th>Prioriteit</th>
+                            <th>Aangemaakt door</th>
+                            <th>Acties</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for k in klachten %}
+                        <tr>
+                            <td>#{{ k.klacht_id }}</td>
+                            <td>{{ k.datum_melding.split('T')[0] if k.datum_melding }}</td>
+                            <td>{{ k.klant.klantnaam if k.klant }}</td>
+                            <td><span class="status-badge status-{{ k.status.replace(' ', '') }}">{{ k.status }}</span></td>
+                            <td>{% if k.prioriteit %}<span class="priority-high">Hoog</span>{% else %}<span class="priority-normal">Normaal</span>{% endif %}</td>
+                            <td>
+                                {% if k.vertegenwoordiger and k.vertegenwoordiger.get('naam') %}
+                                    {{ k.vertegenwoordiger.get('naam') }}
+                                {% else %}
+                                    {{ k.vertegenwoordiger_id }}
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{{ url_for('main.klacht_details', klacht_id=k.klacht_id) }}" class="button">ℹ️</a>
+                                {% if session.get('user_rol') in ['Admin','Key user'] %}
+                                    <form action="{{ url_for('main.keyuser_assign_klacht', klacht_id=k.klacht_id) }}" method="POST" style="display:inline;">
+                                        <select name="vertegenwoordiger_id" required>
+                                            <option value="">Kies vertegenwoordiger</option>
+                                            {% for r in vertegenw %}
+                                                <option value="{{ r.gebruiker_id }}">{{ r.naam }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <button type="submit" class="button">Toewijzen</button>
+                                    </form>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div style="color:#6b7280;">Geen openstaande klachten.</div>
+                {% endif %}
+            </div>
+        </div>
     </div>
 </body>
 </html>
