@@ -12,7 +12,7 @@ from datetime import datetime, date
 import uuid                                      # <--- NIEUW
 import traceback                                 # <--- NIEUW for better debugging
 import base64  # <--- NIEUW
-
+import json  # <--- NIEUW: for parsing bijlages
 
 main = Blueprint('main', __name__)
 
@@ -114,191 +114,202 @@ def user_dashboard():
     else:
         return render_template('user_dashboard.html')
 
+# Helper: safely cast to int if possible
+def safe_int(val):
+    try:
+        return int(val)
+    except Exception:
+        return val
+
+# Update check_supabase_response to support raw dict responses and better logging (non-fatal when no error)
+def check_supabase_response(resp, ctx=""):
+    """Check supabase response for errors and raise if present (or return data)."""
+    # Accept string/dict/None/Response etc.
+    if resp is None:
+        raise Exception(f"Empty response from Supabase at {ctx}")
+
+    # If it's a dict-like response (legacy), allow error handling
+    if isinstance(resp, dict):
+        err = resp.get('error')
+        if err:
+            msg = err.get('message') if isinstance(err, dict) else str(err)
+            print(f"Supabase error in {ctx}: {msg}")
+            raise Exception(f"Supabase error in {ctx}: {msg}")
+        return resp
+
+    # If it's an object with .error attribute
+    err = getattr(resp, 'error', None)
+    if err:
+        # try extract message if present
+        msg = err.message if hasattr(err, 'message') else repr(err)
+        print(f"Supabase error in {ctx}: {msg}")
+        raise Exception(f"Supabase error in {ctx}: {msg}")
+    return resp
+
 @main.route('/user/klachten')
 def user_klachten():
-	if 'user_id' not in session:
-		flash('Toegang geweigerd', 'error')
-		return redirect(url_for('main.login'))
+    if 'user_id' not in session:
+        flash('Toegang geweigerd', 'error')
+        return redirect(url_for('main.login'))
 
-	role = normalized_role()
-	try:
-		query = supabase.table("klacht").select("*")
-		if role == 'User':
-			# ensure integer id
-			try:
-				user_id_int = int(session['user_id'])
-			except Exception:
-				user_id_int = session['user_id']
-			query = query.eq("vertegenwoordiger_id", user_id_int)
+    role = normalized_role()
+    try:
+        # Try to select with relational joins so fewer server calls are required
+        try:
+            query = supabase.table("klacht").select("*, klant:klant_id(klantnaam), categorie:probleemcategorie(type)").order("datum_melding", {"ascending": False})
+            # if User: only their own klachten
+            if role == 'User':
+                user_id_int = safe_int(session['user_id'])
+                query = query.eq("vertegenwoordiger_id", user_id_int)
+            response = query.execute()
+            check_supabase_response(response, "fetching klachten")
+            klachten = response.data if response.data else []
+        except Exception as e:
+            # Fallback: simpler select; if something went wrong with joins we still get data
+            print(f"Warning: join select failed, falling back. Reason: {e}")
+            query = supabase.table("klacht").select("*")
+            if role == 'User':
+                user_id_int = safe_int(session['user_id'])
+                query = query.eq("vertegenwoordiger_id", user_id_int)
+            response = query.execute()
+            check_supabase_response(response, "fetching klachten fallback")
+            klachten = response.data if response.data else []
 
-		response = query.execute()
-		check_supabase_response(response, "fetching klachten")
-		klachten = response.data if response.data else []
-		print(f"DEBUG: user_klachten role={role}, found {len(klachten)} klachten")
+        # Apply filters from GET params
+        klant_id = request.args.get('klant_id')
+        categorie_id = request.args.get('categorie_id')
+        status = request.args.get('status')
+        date_from = request.args.get('date_from')
+        date_to = request.args.get('date_to')
 
-		# Apply filters from GET params
-		klant_id = request.args.get('klant_id')
-		categorie_id = request.args.get('categorie_id')
-		status = request.args.get('status')
-		date_from = request.args.get('date_from')
-		date_to = request.args.get('date_to')
+        if klant_id:
+            klachten = [k for k in klachten if str(k.get('klant_id')) == str(klant_id)]
+        if categorie_id:
+            klachten = [k for k in klachten if str(k.get('categorie_id')) == str(categorie_id)]
+        if status:
+            klachten = [k for k in klachten if k.get('status') == status]
+        if date_from:
+            klachten = [k for k in klachten if k.get('datum_melding') and str(k['datum_melding'])[:10] >= date_from]
+        if date_to:
+            klachten = [k for k in klachten if k.get('datum_melding') and str(k['datum_melding'])[:10] <= date_to]
 
-		if klant_id:
-			klachten = [k for k in klachten if str(k.get('klant_id')) == str(klant_id)]
-		if categorie_id:
-			klachten = [k for k in klachten if str(k.get('categorie_id')) == str(categorie_id)]
-		if status:
-			klachten = [k for k in klachten if k.get('status') == status]
-		if date_from:
-			klachten = [k for k in klachten if k.get('datum_melding') and str(k['datum_melding'])[:10] >= date_from]
-		if date_to:
-			klachten = [k for k in klachten if k.get('datum_melding') and str(k['datum_melding'])[:10] <= date_to]
+        # categorieen for filter options (simple select)
+        categorieen_resp = supabase.table("probleemcategorie").select("categorie_id, type").execute()
+        check_supabase_response(categorieen_resp, "fetching probleemcategorie")
+        categorieen = categorieen_resp.data if categorieen_resp.data else []
 
-		# categorieen for filter options (simple select)
-		categorieen_resp = supabase.table("probleemcategorie").select("categorie_id, type").execute()
-		check_supabase_response(categorieen_resp, "fetching probleemcategorie")
-		categorieen = categorieen_resp.data if categorieen_resp.data else []
+        klanten_resp = supabase.table("klant").select("klant_id, klantnaam").execute()
+        check_supabase_response(klanten_resp, "fetching klanten")
+        klanten = klanten_resp.data if klanten_resp.data else []
 
-		klanten_resp = supabase.table("klant").select("klant_id, klantnaam").execute()
-		check_supabase_response(klanten_resp, "fetching klanten")
-		klanten = klanten_resp.data if klanten_resp.data else []
+        return render_template('user_klachten.html', klachten=klachten, categorieen=categorieen, klanten=klanten)
+    except Exception as e:
+        print(f"Exception in user_klachten: {e}")
+        traceback.print_exc()
+        flash('Er ging iets mis bij het ophalen van klachten', 'error')
+        # Return with empty lists so template can still render
+        return render_template('user_klachten.html', klachten=[], categorieen=[], klanten=[])
 
-		return render_template('user_klachten.html', klachten=klachten, categorieen=categorieen, klanten=klanten)
-	except Exception as e:
-		print(f"Exception in user_klachten: {e}")
-		flash('Er ging iets mis bij het ophalen van klachten', 'error')
-		return render_template('user_klachten.html', klachten=[])
-
-@main.route('/user/klachten/export')
-def klachten_export():
-	if 'user_id' not in session or not is_manager_role():
-		flash('Toegang geweigerd', 'error')
-		return redirect(url_for('main.user_klachten'))
-
-	role = normalized_role()
-	try:
-		response = supabase.table("klacht").select("*").execute()
-		check_supabase_response(response, "export: fetching klachten")
-		klachten = response.data if response.data else []
-
-		# filters unchanged
-		klant_id = request.args.get('klant_id')
-		categorie_id = request.args.get('categorie_id')
-		status = request.args.get('status')
-		date_from = request.args.get('date_from')
-		date_to = request.args.get('date_to')
-
-		if klant_id:
-			klachten = [k for k in klachten if str(k.get('klant_id')) == str(klant_id)]
-		if categorie_id:
-			klachten = [k for k in klachten if str(k.get('categorie_id')) == str(categorie_id)]
-		if status:
-			klachten = [k for k in klachten if k.get('status') == status]
-		if date_from:
-			klachten = [k for k in klachten if k.get('datum_melding') and str(k['datum_melding'])[:10] >= date_from]
-		if date_to:
-			klachten = [k for k in klachten if k.get('datum_melding') and str(k['datum_melding'])[:10] <= date_to]
-
-		# CSV build unchanged
-		output = io.StringIO()
-		writer = csv.writer(output)
-		header = ['klacht_id', 'vertegenwoordiger_id', 'klant_id', 'order_nummer', 'categorie_id', 'status', 'prioriteit', 'datum_melding']
-		writer.writerow(header)
-		for k in klachten:
-			writer.writerow([k.get('klacht_id'), k.get('vertegenwoordiger_id'), k.get('klant_id'), k.get('order_nummer'),
-			                 k.get('categorie_id'), k.get('status'), k.get('prioriteit'), k.get('datum_melding')])
-
-		output.seek(0)
-		csv_data = output.getvalue()
-		response = make_response(csv_data)
-		response.headers['Content-Disposition'] = 'attachment; filename=klachten_export.csv'
-		response.headers['Content-Type'] = 'text/csv; charset=utf-8'
-		return response
-	except Exception as e:
-		print(f"Exception in klachten_export: {e}")
-		flash('Er ging iets mis bij het exporteren van klachten', 'error')
-		return redirect(url_for('main.user_klachten'))
 
 @main.route('/user/klacht/<int:klacht_id>/details')
 def klacht_details(klacht_id):
-	if 'user_id' not in session:
-		flash('Toegang geweigerd', 'error')
-		return redirect(url_for('main.login'))
+    if 'user_id' not in session:
+        flash('Toegang geweigerd', 'error')
+        return redirect(url_for('main.login'))
 
-	try:
-		# fetch complaint (simple select)
-		klacht_response = supabase.table("klacht").select("*").eq("klacht_id", klacht_id).execute()
-		check_supabase_response(klacht_response, "fetching single complaint")
-		if not klacht_response.data:
-			flash('Klacht niet gevonden', 'error')
-			return redirect(url_for('main.user_klachten'))
-		klacht_data = klacht_response.data[0]
+    try:
+        # use relational select to get klant + categorie with one call
+        klacht_response = supabase.table("klacht").select("*, klant:klant_id(klantnaam), categorie:probleemcategorie(type)").eq("klacht_id", safe_int(klacht_id)).execute()
+        check_supabase_response(klacht_response, "fetching single complaint")
+        if not klacht_response.data:
+            flash('Klacht niet gevonden', 'error')
+            return redirect(url_for('main.user_klachten'))
+        klacht_data = klacht_response.data[0]
 
-		# fetch klant if present
-		if klacht_data.get('klant_id'):
-			try:
-				kresp = supabase.table("klant").select("klantnaam").eq("klant_id", klacht_data['klant_id']).execute()
-				check_supabase_response(kresp, "fetch klant for details")
-				if kresp.data:
-					klacht_data['klant'] = {"klantnaam": kresp.data[0].get('klantnaam')}
-			except Exception as e:
-				print(f"Warning: could not fetch klant details: {e}")
+        # Authorization check - ensure numbers are comparable
+        if not can_view_klacht(klacht_data, safe_int(session['user_id']), session.get('user_rol')):
+            flash('Toegang geweigerd', 'error')
+            return redirect(url_for('main.user_klachten'))
 
-		# fetch categorie if present
-		if klacht_data.get('categorie_id'):
-			try:
-				cresp = supabase.table("probleemcategorie").select("type").eq("categorie_id", klacht_data['categorie_id']).execute()
-				check_supabase_response(cresp, "fetch categorie for details")
-				if cresp.data:
-					klacht_data['categorie'] = {"type": cresp.data[0].get('type')}
-			except Exception as e:
-				print(f"Warning: could not fetch categorie details: {e}")
+        # statushistoriek (defensive)
+        try:
+            sh_resp = supabase.table("statushistoriek").select("*").eq("klacht_id", safe_int(klacht_id)).order("datum_wijziging", {"ascending": False}).execute()
+            check_supabase_response(sh_resp, "status historiek")
+            statushistoriek = sh_resp.data if sh_resp.data else []
+        except Exception as e:
+            print(f"Warning: failed to fetch status historiek for {klacht_id}: {e}")
+            statushistoriek = []
 
-		# authorization check
-		if not can_view_klacht(klacht_data, session['user_id'], session.get('user_rol')):
-			flash('Toegang geweigerd', 'error')
-			return redirect(url_for('main.user_klachten'))
+        # categorieen (for edit dropdown)
+        try:
+            categorieen_response = supabase.table("probleemcategorie").select("categorie_id, type").execute()
+            check_supabase_response(categorieen_response, "fetching categories")
+            categorieen = categorieen_response.data if categorieen_response.data else []
+        except Exception as e:
+            print(f"Warning: could not fetch categorieen: {e}")
+            categorieen = []
 
-		# statushistoriek
-		sh_resp = supabase.table("statushistoriek").select("*").eq("klacht_id", klacht_id).order("datum_wijziging", {"ascending": False}).execute()
-		check_supabase_response(sh_resp, "status historiek")
-		statushistoriek = sh_resp.data if sh_resp.data else []
+        # vertegenw if manager/key user
+        vertegenw = []
+        if normalized_role() in ('Admin', 'Key user'):
+            try:
+                reps_resp = supabase.table("gebruiker").select("gebruiker_id, naam").eq("rol", "User").execute()
+                check_supabase_response(reps_resp, "fetching reps")
+                vertegenw = reps_resp.data if reps_resp.data else []
+            except Exception as e:
+                print(f"Warning: could not fetch vertegenw: {e}")
+                vertegenw = []
 
-		# categorieen
-		categorieen_response = supabase.table("probleemcategorie").select("categorie_id, type").execute()
-		check_supabase_response(categorieen_response, "fetching categories")
-		categorieen = categorieen_response.data if categorieen_response.data else []
+        # Bijlages handling: safe parsing (list/dict/JSON string/data-url)
+        if klacht_data.get('bijlages'):
+            parsed_bijlages = []
+            raw_bijlages = klacht_data.get('bijlages')
+            # If bijlages is a string (e.g. JSON string), try to parse
+            if isinstance(raw_bijlages, str):
+                try:
+                    raw_bijlages = json.loads(raw_bijlages)
+                except Exception:
+                    # Not JSON — leave as is and skip parsing
+                    raw_bijlages = [raw_bijlages]
 
-		# vertegenw if manager/key user
-		vertegenw = []
-		if normalized_role() in ('Admin', 'Key user'):
-			reps_resp = supabase.table("gebruiker").select("gebruiker_id, naam").eq("rol", "User").execute()
-			check_supabase_response(reps_resp, "fetching reps")
-			vertegenw = reps_resp.data if reps_resp.data else []
+            if isinstance(raw_bijlages, list):
+                for b in raw_bijlages:
+                    b_copy = dict(b) if isinstance(b, dict) else {"url": b, "naam": str(b)}
+                    if not b_copy.get('id'):
+                        b_copy['id'] = str(uuid.uuid4())
+                    if b_copy.get('content') and not b_copy.get('url'):
+                        ct = b_copy.get('content_type', 'application/octet-stream')
+                        b_copy['url'] = f"data:{ct};base64,{b_copy.get('content')}"
+                    content_type = (b_copy.get('content_type') or '') or ''
+                    url_lower = (b_copy.get('url') or '').lower()
+                    if content_type.startswith('image/') or url_lower.endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')):
+                        b_copy['is_image'] = True
+                    else:
+                        b_copy['is_image'] = False
+                    parsed_bijlages.append(b_copy)
+            else:
+                # unknown format, still make sure template can handle one element list
+                parsed_bijlages = [{"id": str(uuid.uuid4()), "url": str(raw_bijlages), "naam": str(raw_bijlages), "is_image": False}]
 
-		# bijlages handling...
-		if klacht_data.get('bijlages'):
-			new_bijlages = []
-			for b in klacht_data['bijlages']:
-				b_copy = dict(b)  # copy to avoid mutating original
-				if not b_copy.get('id'):
-					b_copy['id'] = str(uuid.uuid4())
-				if b_copy.get('content') and not b_copy.get('url'):
-					ct = b_copy.get('content_type', 'application/octet-stream')
-					b_copy['url'] = f"data:{ct};base64,{b_copy.get('content')}"
-				content_type = b_copy.get('content_type', '') or ''
-				if content_type.startswith('image/') or (b_copy.get('url', '').lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp'))):
-					b_copy['is_image'] = True
-				else:
-					b_copy['is_image'] = False
-				new_bijlages.append(b_copy)
-			klacht_data['bijlages'] = new_bijlages
+            klacht_data['bijlages'] = parsed_bijlages
 
-		return render_template('klacht_details.html', klacht=klacht_data, klacht_id=klacht_id, categorieen=categorieen, statushistoriek=statushistoriek, vertegenw=vertegenw)
-	except Exception as e:
-		print(f"Exception in klacht_details: {e}")
-		flash('Er ging iets mis bij het ophalen van de klacht details', 'error')
-		return redirect(url_for('main.user_klachten'))
+        # After we fetched klacht_data in klacht_details, ensure we have the creator name even if relation wasn't joined:
+        # Ensure we have the vertegenwoordiger object (fill from users if missing)
+        if not klacht_data.get('vertegenwoordiger') and klacht_data.get('vertegenwoordiger_id'):
+            try:
+                uresp = supabase.table("gebruiker").select("naam").eq("gebruiker_id", int(klacht_data['vertegenwoordiger_id'])).execute()
+                check_supabase_response(uresp, "fetch creator name for details")
+                if uresp.data and len(uresp.data) > 0:
+                    klacht_data['vertegenwoordiger'] = {'naam': uresp.data[0].get('naam')}
+            except Exception as e:
+                print(f"Warning: could not fetch creator name for klacht {klacht_id}: {e}")
+
+        return render_template('klacht_details.html', klacht=klacht_data, klacht_id=klacht_id, categorieen=categorieen, statushistoriek=statushistoriek, vertegenw=vertegenw)
+    except Exception as e:
+        print(f"Exception in klacht_details: {e}")
+        traceback.print_exc()
+        flash('Er ging iets mis bij het ophalen van de klacht details', 'error')
+        return redirect(url_for('main.user_klachten'))
 
 # Helper: upload one file to Supabase Storage OR store base64 in DB and return bijlage dict
 def upload_file_to_storage(file_obj, store_in_db=False):
@@ -616,6 +627,11 @@ def keyuser_assign_klacht(klacht_id):
 
     return redirect(url_for('main.klacht_details', klacht_id=klacht_id))
 
+@main.route('/manager/klacht/<int:klacht_id>/toewijzen', methods=['POST'])
+def manager_assign_klacht(klacht_id):
+    # Backwards compatibility alias: call the keyuser assign handler.
+    # This simply forwards the request, so any templates using the old endpoint will not break.
+    return keyuser_assign_klacht(klacht_id)
 
 @main.route('/keyuser/dashboard')
 def keyuser_dashboard():
@@ -625,18 +641,72 @@ def keyuser_dashboard():
     if normalized_role() not in ('Key user', 'Admin'):
         flash('Toegang geweigerd', 'error')
         return redirect(url_for('main.user_dashboard'))
-    # Show all complaints and all representatives (no company scoping)
+
     try:
-        reps_resp = supabase.table("gebruiker").select("gebruiker_id, naam, email").eq("rol", "User").execute()
+        # Fetch representatives (Users) -> change: fetch all users so we also know admins/key users who created klachten
+        reps_resp = supabase.table("gebruiker").select("gebruiker_id, naam, email").execute()
+        check_supabase_response(reps_resp, "fetching reps")
         vertegenw = reps_resp.data if reps_resp.data else []
-        klachten_resp = supabase.table("klacht").select("*, klant:klant_id(klantnaam), categorie:probleemcategorie(type)").order("datum_melding", {"ascending": False}).execute()
-        klachten = klachten_resp.data if klachten_resp.data else []
+
+        # Build a quick map id -> naam for fallback usage
+        rep_map = {r['gebruiker_id']: r['naam'] for r in vertegenw if r.get('gebruiker_id') is not None}
+
+        # Try relational select for open klachten (exclude 'Afgehandeld') and order by prioriteit desc, datum_melding desc
+        klachten = []
+        try:
+            klachten_resp = supabase.table("klacht").select(
+                "*, klant:klant_id(klantnaam), categorie:probleemcategorie(type), vertegenwoordiger:vertegenwoordiger_id(naam)"
+            ).neq("status", "Afgehandeld").order("prioriteit", {"ascending": False}).order("datum_melding", {"ascending": False}).execute()
+            check_supabase_response(klachten_resp, "fetching open klachten with relations")
+            klachten = klachten_resp.data if klachten_resp.data else []
+        except Exception as e:
+            # If relational select fails, fallback to simpler query and sort/filter locally
+            print(f"Warning: relational select for keyuser open klachten failed: {e}")
+            traceback.print_exc()
+            fallback_resp = supabase.table("klacht").select("*").execute()
+            check_supabase_response(fallback_resp, "fetching klachten fallback")
+            # Ensure data exists before filtering
+            raw_klachten = fallback_resp.data if fallback_resp.data else []
+            # Filter out 'Afgehandeld'
+            filtered = [k for k in raw_klachten if (k.get('status') or '').strip() != 'Afgehandeld']
+            # Add representative name using rep_map
+            for k in filtered:
+                if not k.get('vertegenwoordiger'):
+                    rep_id = k.get('vertegenwoordiger_id')
+                    if rep_id and rep_id in rep_map:
+                        k['vertegenwoordiger'] = {'naam': rep_map.get(rep_id)}
+                    else:
+                        k['vertegenwoordiger'] = None
+            # Sort by prioriteit (True first) then datum_melding DESC
+            try:
+                filtered_sorted = sorted(filtered, key=lambda x: (0 if bool(x.get('prioriteit')) else 1), reverse=False)
+                filtered_sorted = sorted(filtered_sorted, key=lambda x: (x.get('datum_melding') or ''), reverse=True)
+                klachten = filtered_sorted
+            except Exception:
+                klachten = sorted(filtered, key=lambda x: (0 if bool(x.get('prioriteit')) else 1), reverse=False)
+
+        # Ensure each resultaat has vertegenwoordiger object (use rep_map if relation not provided)
+        for k in klachten:
+            if not k.get('vertegenwoordiger'):
+                rep_id = k.get('vertegenwoordiger_id')
+                if rep_id and rep_id in rep_map:
+                    k['vertegenwoordiger'] = {'naam': rep_map.get(rep_id)}
+                else:
+                    k['vertegenwoordiger'] = None
+
         total_klachten = len(klachten)
     except Exception as e:
         print("Error getting keyuser stats:", e)
+        traceback.print_exc()
         total_klachten = 0
         vertegenw = []
         klachten = []
+
+    # Defensive: ensure klachten is a list (some Supabase clients return dict or None)
+    if not isinstance(klachten, list):
+        klachten = list(klachten) if klachten else []
+
+    print(f"DEBUG: keyuser_dashboard found {len(klachten)} klachten and {len(vertegenw)} vertegenw")
     return render_template('keyuser_dashboard.html', total_klachten=total_klachten, klachten=klachten, vertegenw=vertegenw)
 
 # Helper: return normalized role as "User", "Key user", "Admin"
@@ -707,18 +777,24 @@ def klacht_bewerken(klacht_id):
     
     try:
         # Controleer of de klacht van de huidige user is
-        klacht_check = supabase.table("klacht").select("vertegenwoordiger_id").eq("klacht_id", klacht_id).execute()
+        klacht_check = supabase.table("klacht").select("vertegenwoordiger_id, status").eq("klacht_id", klacht_id).execute()
         
         if not klacht_check.data:
             flash('Klacht niet gevonden', 'error')
             return redirect(url_for('main.user_klachten'))
         
         klacht_owner_id = klacht_check.data[0]['vertegenwoordiger_id']
-        # authorization: check if current user can edit this complaint
         current_role = session.get('user_rol')
+        # authorization: check if current user can edit this complaint
         if not can_edit_klacht({'vertegenwoordiger_id': klacht_owner_id}, session['user_id'], current_role):
             flash('Toegang geweigerd', 'error')
             return redirect(url_for('main.user_klachten'))
+
+        # Capture old status BEFORE we update anything
+        try:
+            old_status = klacht_check.data[0].get('status')
+        except Exception:
+            old_status = None
 
         # Haal form data op
         order_nummer = request.form.get('order_nummer', '').strip()
@@ -776,7 +852,7 @@ def klacht_bewerken(klacht_id):
                     if uploaded:
                         existing_bijlages.append(uploaded)
 
-        # Update object with nieuwe bijlages JSON
+        # Build update_data — include status/prioriteit BEFORE update if manager
         update_data = {
             'order_nummer': order_nummer or None,
             'categorie_id': int(categorie_id),
@@ -785,27 +861,31 @@ def klacht_bewerken(klacht_id):
             'datum_laatst_bewerkt': datetime.utcnow().isoformat(),
             'bijlages': existing_bijlages if existing_bijlages else None
         }
+
         # Alleen admin/key user kan vertegenwoordiger wijzigen
         if session.get('user_rol') in ('Admin', 'Key user') and vertegenwoordiger_id:
-            update_data['vertegenwoordiger_id'] = int(vertegenwoordiger_id)
+            try:
+                update_data['vertegenwoordiger_id'] = int(vertegenwoordiger_id)
+            except Exception:
+                # keep it safe — ignore invalid int casting
+                pass
 
+        # Process status and prioriteit in the update if the user is a manager
+        status_in_form = request.form.get('status')
+        prioriteit_in_form = request.form.get('prioriteit')
+
+        if is_manager_role():
+            if status_in_form:
+                update_data['status'] = status_in_form
+            # checkbox presence means True; absence => False
+            update_data['prioriteit'] = True if prioriteit_in_form else False
+
+        # Now perform the update (single call)
         response = supabase.table("klacht").update(update_data).eq("klacht_id", klacht_id).execute()
 
         if response.data:
-            # determine role normalized
-            role = normalized_role()
-            # capture old_status
-            try:
-                old_status_resp = supabase.table("klacht").select("status").eq("klacht_id", klacht_id).execute()
-                old_status = old_status_resp.data[0].get('status') if old_status_resp.data else None
-            except Exception:
-                old_status = None
-
-            status_in_form = request.form.get('status')
-            # Only allow managers to update status/prio
-            if status_in_form and is_manager_role():
-                update_data['status'] = status_in_form
-                # insert history
+            # If the status changed and the user is a manager, insert history and send notifications
+            if is_manager_role() and status_in_form and status_in_form != old_status:
                 try:
                     hist_obj = {
                         'klacht_id': klacht_id,
@@ -829,11 +909,6 @@ def klacht_bewerken(klacht_id):
                     except Exception as e:
                         print(f"Error sending approve emails: {e}")
 
-            # prioriteit field logic maintained (only managers)
-            prioriteit_in_form = request.form.get('prioriteit')
-            if is_manager_role():
-                update_data['prioriteit'] = True if prioriteit_in_form else False
-
             flash('Klacht succesvol bijgewerkt!', 'success')
         else:
             error_msg = 'Er ging iets mis bij het bijwerken van de klacht'
@@ -846,6 +921,7 @@ def klacht_bewerken(klacht_id):
     except Exception as e:
         flash(f'Er ging iets mis bij het bijwerken van de klacht: {str(e)}', 'error')
         print(f"Error: {e}")
+        traceback.print_exc()
         return redirect(url_for('main.klacht_details', klacht_id=klacht_id))
 
 @main.route('/user/klacht/<int:klacht_id>/verwijderen', methods=['POST'])

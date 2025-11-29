@@ -29,10 +29,11 @@
         <div class="grid">
             <div class="card">
                 <h2>Bedrijfs-klachten</h2>
-                <p>Totaal klachten in uw productiebedrijf: <strong>{{ total_klachten }}</strong></p>
+                <p>Aantal openstaande klachten: <strong>{{ total_klachten }}</strong></p>
                 <p>
                     <a href="{{ url_for('main.klacht_aanmaken') }}" class="button">Nieuwe Klacht</a>
-                    <a href="{{ url_for('main.klachten_export') }}" class="button">Export (CSV)</a>
+                    <!-- gebruik directe pad-link i.v.m. url_for BuildError -->
+                    <a href="/user/klachten/export" class="button">Export (CSV)</a>
                 </p>
             </div>
             <div class="card">
@@ -52,7 +53,7 @@
                         <th>Klant</th>
                         <th>Status</th>
                         <th>Prioriteit</th>
-                        <th>Vertegenwoordiger</th>
+                        <th>Aangemaakt door</th>
                         <th>Acties</th>
                     </tr>
                 </thead>
@@ -64,10 +65,16 @@
                         <td>{{ k.klant.klantnaam if k.klant }}</td>
                         <td><span class="status-badge status-{{ k.status.replace(' ', '') }}">{{ k.status }}</span></td>
                         <td>{% if k.prioriteit %}<span class="priority-high">Hoog</span>{% else %}<span class="priority-normal">Normaal</span>{% endif %}</td>
-                        <td>{{ k.vertegenwoordiger_id }}</td>
+                        <td>
+                            {% if k.vertegenwoordiger and k.vertegenwoordiger.get('naam') %}
+                                {{ k.vertegenwoordiger.get('naam') }}
+                            {% else %}
+                                {{ k.vertegenwoordiger_id }}
+                            {% endif %}
+                        </td>
                         <td>
                             <a href="{{ url_for('main.klacht_details', klacht_id=k.klacht_id) }}" class="action-link">ℹ️</a>
-                            <form action="{{ url_for('main.manager_assign_klacht', klacht_id=k.klacht_id) }}" method="POST" class="small-form" style="display:inline-block; margin-left:8px;">
+                            <form action="{{ url_for('main.keyuser_assign_klacht', klacht_id=k.klacht_id) }}" method="POST" class="small-form" style="display:inline-block; margin-left:8px;">
                                 <select name="vertegenwoordiger_id" class="select-small" required>
                                     <option value="">Kies vertegenwoordiger</option>
                                     {% for r in vertegenw %}

@@ -192,7 +192,8 @@
             <input type="date" name="date_to" value="{{ request.args.get('date_to') or '' }}">
             <button type="submit" class="action-link">Filter</button>
             {% if session.get('user_rol') in ['Admin', 'Key user'] %}
-                <a href="{{ url_for('main.klachten_export', **request.args.to_dict()) }}" class="action-link" style="margin-left:8px">📥 Export CSV</a>
+                <!-- Gebruik directe pad en voeg query-string toe als deze aanwezig is -->
+                <a href="/user/klachten/export{% if request.query_string %}?{{ request.query_string.decode('utf-8') }}{% endif %}" class="action-link" style="margin-left:8px">📥 Export CSV</a>
             {% endif %}
         </form>
 

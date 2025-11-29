@@ -244,6 +244,23 @@
                 </div>
 
                 <div class="detail-row">
+                    <div class="detail-label">Aangemaakt door:</div>
+                    <div class="detail-value">
+                        <div class="readonly-field">
+                            {% if klacht.vertegenwoordiger and klacht.vertegenwoordiger.get('naam') %}
+                                {{ klacht.vertegenwoordiger.get('naam') }}
+                            {% else %}
+                                {% if klacht.vertegenwoordiger_id %}
+                                    Gebruiker ID: {{ klacht.vertegenwoordiger_id }}
+                                {% else %}
+                                    Onbekend
+                                {% endif %}
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="detail-row">
                     <div class="detail-label">Status:</div>
                     <div class="detail-value">
                         <span class="status-badge status-{{ klacht.status.replace(' ', '') }}">
