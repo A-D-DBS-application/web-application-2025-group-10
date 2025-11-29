@@ -1028,6 +1028,117 @@ def klacht_verwijderen(klacht_id):
 
     return redirect(url_for('main.user_klachten'))
 
+@main.route('/user/klachten/export', methods=['GET'])
+def klachten_export():
+    if 'user_id' not in session or not is_manager_role():
+        flash('Toegang geweigerd', 'error')
+        return redirect(url_for('main.user_klachten'))
+
+    try:
+        # fetch all klachten (we'll filter locally for consistency with UI)
+        resp = supabase.table("klacht").select("*").execute()
+        check_supabase_response(resp, "export: fetching klachten")
+        klachten = resp.data if resp.data else []
+
+        # Apply the same filters used in the UI
+        klant_id = request.args.get('klant_id')
+        categorie_id = request.args.get('categorie_id')
+        status = request.args.get('status')
+        date_from = request.args.get('date_from')
+        date_to = request.args.get('date_to')
+
+        if klant_id:
+            klachten = [k for k in klachten if str(k.get('klant_id')) == str(klant_id)]
+        if categorie_id:
+            klachten = [k for k in klachten if str(k.get('categorie_id')) == str(categorie_id)]
+        if status:
+            klachten = [k for k in klachten if k.get('status') == status]
+        if date_from:
+            klachten = [k for k in klachten if k.get('datum_melding') and str(k['datum_melding'])[:10] >= date_from]
+        if date_to:
+            klachten = [k for k in klachten if k.get('datum_melding') and str(k['datum_melding'])[:10] <= date_to]
+
+        # Defensive extraction helper
+        def safe(k, *keys):
+            v = k
+            for kk in keys:
+                if not v:
+                    return ''
+                if isinstance(v, dict):
+                    v = v.get(kk, '')
+                else:
+                    return ''
+            return v or ''
+
+        # Build CSV in memory
+        output = io.StringIO()
+        writer = csv.writer(output)
+        header = [
+            'klacht_id',
+            'vertegenwoordiger_id',
+            'vertegenwoordiger_naam',
+            'klant_id',
+            'klantnaam',
+            'order_nummer',
+            'categorie_id',
+            'categorie_type',
+            'status',
+            'prioriteit',
+            'datum_melding'
+        ]
+        writer.writerow(header)
+
+        for k in klachten:
+            try:
+                klacht_id = k.get('klacht_id')
+                verteg_id = k.get('vertegenwoordiger_id')
+                vertegenw_naam = ''
+                if isinstance(k.get('vertegenwoordiger'), dict):
+                    vertegenw_naam = k.get('vertegenwoordiger').get('naam') or ''
+                # if vertegenw not present, try to fetch or fallback empty
+                if not vertegenw_naam and verteg_id:
+                    vertegenw_naam = ''  # avoid fetching inside loop for performance
+
+                klant_id_val = k.get('klant_id')
+                klantnaam = k.get('klant', {}).get('klantnaam') if isinstance(k.get('klant'), dict) else ''
+                cat_id = k.get('categorie_id')
+                cat_type = k.get('categorie', {}).get('type') if isinstance(k.get('categorie'), dict) else ''
+                prioriteit = k.get('prioriteit')
+                # Ensure proper string values and avoid nested dicts
+                row = [
+                    klacht_id,
+                    verteg_id,
+                    vertegenw_naam,
+                    klant_id_val,
+                    klantnaam,
+                    k.get('order_nummer') or '',
+                    cat_id,
+                    cat_type,
+                    k.get('status') or '',
+                    str(prioriteit),
+                    k.get('datum_melding') or ''
+                ]
+                writer.writerow([str(item) for item in row])
+            except Exception as e:
+                print(f"Warning: failed to write row for klacht {k.get('klacht_id')}: {e}")
+                # continue with rest
+
+        csv_data = output.getvalue()
+        output.close()
+
+        # Build response with timestamped filename
+        filename = f"klachten_export_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.csv"
+        response = make_response(csv_data)
+        response.headers['Content-Disposition'] = f'attachment; filename={filename}'
+        response.headers['Content-Type'] = 'text/csv; charset=utf-8'
+        return response
+
+    except Exception as e:
+        print(f"Exception in klachten_export: {e}")
+        traceback.print_exc()
+        flash('Er ging iets mis bij het exporteren van klachten', 'error')
+        return redirect(url_for('main.user_klachten'))
+
 def check_supabase_response(resp, ctx=""):
 	"""Check supabase response for errors and raise if present (or return data)."""
 	if resp is None:
