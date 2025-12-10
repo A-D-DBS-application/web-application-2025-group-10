@@ -4,15 +4,18 @@ import io
 import os
 import smtplib
 from email.message import EmailMessage
-
-from werkzeug.security import check_password_hash, generate_password_hash
-from werkzeug.utils import secure_filename       # <--- NIEUW
-from supabase import create_client
+import base64
+import json
+import uuid
+import traceback
 from datetime import datetime, date
-import uuid                                      # <--- NIEUW
-import traceback                                 # <--- NIEUW for better debugging
-import base64  # <--- NIEUW
-import json  # <--- NIEUW: for parsing bijlages
+from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.utils import secure_filename
+from supabase import create_client
+import requests
+from openpyxl import Workbook
+from openpyxl.drawing.image import Image as XLImage
+from openpyxl.worksheet.table import Table, TableStyleInfo
 
 main = Blueprint('main', __name__)
 
@@ -25,7 +28,18 @@ supabase = create_client(supabase_url, supabase_key)
 BUCKET_NAME = "bijlages"
 
 # Toggle: bestanden in DB opslaan i.p.v. Storage (let op: base64 in DB kan groot worden)
-STORE_FILES_IN_DB = True  # set to False to keep using Supabase Storage and store public URLs
+# Voor deze setup gebruiken we enkel Supabase Storage (geen base64 in DB)
+STORE_FILES_IN_DB = False  # alleen Storage gebruiken
+
+# Beschikbare businessunits (Productiebedrijf)
+BUSINESSUNITS = [
+    "Vanca",
+    "Vanca Group",
+    "Placabois",
+    "IWP",
+    "Forma",
+    "Lamitrans",
+]
 
 
 @main.route('/')
@@ -57,6 +71,8 @@ def login():
 					session['user_naam'] = user_data['naam']
 					# Normalize role display: Capitalise only first character (e.g., "Key user")
 					session['user_rol'] = (user_data.get('rol') or '').strip().capitalize()
+					session['productiebedrijf_id'] = user_data.get('productiebedrijf_id')
+					session['productiebedrijf_naam'] = get_productiebedrijf_name(user_data.get('productiebedrijf_id'))
 
 					# Redirect naar rol-specifieke dashboard (automatisch)
 					flash('Login succesvol!', 'success')
@@ -73,6 +89,8 @@ def login():
 					session['user_email'] = user_data['email']
 					session['user_naam'] = user_data['naam']
 					session['user_rol'] = (user_data.get('rol') or '').strip().capitalize()
+					session['productiebedrijf_id'] = user_data.get('productiebedrijf_id')
+					session['productiebedrijf_naam'] = get_productiebedrijf_name(user_data.get('productiebedrijf_id'))
 
 					# Redirect naar rol-specifieke dashboard (automatisch)
 					flash('Login succesvol!', 'success')
@@ -106,6 +124,7 @@ def user_dashboard():
     if 'user_id' not in session:
         flash('Toegang geweigerd', 'error')
         return redirect(url_for('main.login'))
+    notify_stale_complaints()
     role = normalized_role()
     if role == 'Admin':
         return redirect(url_for('main.admin_dashboard'))
@@ -120,6 +139,148 @@ def safe_int(val):
         return int(val)
     except Exception:
         return val
+
+# Helper: fetch productiebedrijf naam
+def get_productiebedrijf_name(prod_id):
+    if not prod_id:
+        return ''
+    try:
+        resp = supabase.table("productiebedrijf").select("naam").eq("productiebedrijf_id", safe_int(prod_id)).execute()
+        check_supabase_response(resp, "fetch productiebedrijf naam")
+        if resp.data and len(resp.data) > 0:
+            return resp.data[0].get('naam') or ''
+    except Exception as e:
+        print(f"Warning: productiebedrijf naam niet gevonden: {e}")
+    return ''
+
+# Helper: resolve or create productiebedrijf by id or naam, return id or None
+def resolve_or_create_productiebedrijf(value):
+    if not value:
+        return None
+    # if numeric, assume id
+    try:
+        return int(value)
+    except Exception:
+        pass
+    naam = str(value).strip()
+    if not naam:
+        return None
+    try:
+        # lookup
+        resp = supabase.table("productiebedrijf").select("productiebedrijf_id").eq("naam", naam).execute()
+        check_supabase_response(resp, "lookup productiebedrijf by naam")
+        if resp.data and len(resp.data) > 0:
+            return resp.data[0].get('productiebedrijf_id')
+        # create
+        insert_resp = supabase.table("productiebedrijf").insert({"naam": naam}).execute()
+        check_supabase_response(insert_resp, "insert productiebedrijf by naam")
+        if insert_resp.data and len(insert_resp.data) > 0:
+            return insert_resp.data[0].get('productiebedrijf_id')
+    except Exception as e:
+        print(f"resolve_or_create_productiebedrijf error: {e}")
+    return None
+
+# Helper: fetch users by roles (optioneel filter op businessunit)
+def get_users_by_roles(roles=None, businessunit=None):
+    try:
+        roles = roles or []
+        if roles:
+            resp = supabase.table("gebruiker").select("gebruiker_id, naam, email, rol, productiebedrijf_id").in_("rol", roles).execute()
+        else:
+            resp = supabase.table("gebruiker").select("gebruiker_id, naam, email, rol, productiebedrijf_id").execute()
+        check_supabase_response(resp, "fetch users by roles")
+        users = resp.data if resp.data else []
+        if businessunit:
+            users = [u for u in users if get_productiebedrijf_name(u.get('productiebedrijf_id')) == businessunit]
+        return users
+    except Exception as e:
+        print(f"Warning: get_users_by_roles failed: {e}")
+        return []
+
+# Helper: stuur mail naar admins/key-users bij nieuwe klacht
+def notify_new_complaint(businessunit, klacht_id):
+    try:
+        recipients = get_users_by_roles(['Admin', 'Key user'], businessunit=businessunit)
+        emails = [u.get('email') for u in recipients if u.get('email')]
+        if not emails:
+            return
+        try:
+            link = url_for('main.klacht_details', klacht_id=klacht_id, _external=True)
+        except Exception:
+            link = f"/user/klacht/{klacht_id}/details"
+        send_email("Nieuwe klacht ingediend", f"Er is een nieuwe klacht #{klacht_id} voor businessunit {businessunit}. Bekijk: {link}", emails)
+    except Exception as e:
+        print(f"notify_new_complaint error: {e}")
+
+# Helper: stuur mails voor klachten die langer dan 7 dagen op Ingediend staan
+def notify_stale_complaints():
+    try:
+        resp = supabase.table("klacht").select("*").eq("status", "Ingediend").execute()
+        check_supabase_response(resp, "stale klachten")
+        klachten = resp.data if resp.data else []
+        today = date.today()
+        for k in klachten:
+            try:
+                dt_str = k.get('datum_melding')
+                if not dt_str:
+                    continue
+                # parse date yyyy-mm-dd
+                dt_date = date.fromisoformat(str(dt_str)[:10])
+                if (today - dt_date).days < 7:
+                    continue
+                bu = k.get('productiebedrijf')
+                klacht_id = k.get('klacht_id')
+                # mails naar verantwoordelijke (vertegenwoordiger_id), admins/key users van bu
+                recipients = []
+                if k.get('vertegenwoordiger_id'):
+                    user_resp = supabase.table("gebruiker").select("email, productiebedrijf_id").eq("gebruiker_id", safe_int(k['vertegenwoordiger_id'])).execute()
+                    if user_resp.data and user_resp.data[0].get('email'):
+                        recipients.append(user_resp.data[0]['email'])
+                recipients += [u.get('email') for u in get_users_by_roles(['Admin', 'Key user'], businessunit=bu) if u.get('email')]
+                # dedupe
+                recipients = list({r for r in recipients if r})
+                if recipients:
+                    try:
+                        link = url_for('main.klacht_details', klacht_id=klacht_id, _external=True)
+                    except Exception:
+                        link = f"/user/klacht/{klacht_id}/details"
+                    send_email("Reminder: klacht staat 7+ dagen op Ingediend", f"Klacht #{klacht_id} staat langer dan een week op Ingediend. Bekijk: {link}", recipients)
+            except Exception as inner:
+                print(f"stale notification error for klacht {k.get('klacht_id')}: {inner}")
+    except Exception as e:
+        print(f"notify_stale_complaints error: {e}")
+
+# Helper: fetch image bytes (from URL or data:) for embedding in Excel
+def fetch_image_bytes(url):
+    if not url:
+        return None
+    try:
+        if url.startswith('data:'):
+            # data URL: data:image/png;base64,...
+            if ';base64,' in url:
+                b64 = url.split(';base64,', 1)[1]
+                return base64.b64decode(b64)
+            return None
+        # normal URL
+        resp = requests.get(url, timeout=10)
+        if resp.status_code == 200 and resp.headers.get('Content-Type', '').startswith('image/'):
+            return resp.content
+    except Exception as e:
+        print(f"fetch_image_bytes error: {e}")
+    return None
+
+# Helper: fetch productiebedrijf naam
+def get_productiebedrijf_name(prod_id):
+    if not prod_id:
+        return ''
+    try:
+        resp = supabase.table("productiebedrijf").select("naam").eq("productiebedrijf_id", safe_int(prod_id)).execute()
+        check_supabase_response(resp, "fetch productiebedrijf naam")
+        if resp.data and len(resp.data) > 0:
+            return resp.data[0].get('naam') or ''
+    except Exception as e:
+        print(f"Warning: productiebedrijf naam niet gevonden: {e}")
+    return ''
 
 # Update check_supabase_response to support raw dict responses and better logging (non-fatal when no error)
 def check_supabase_response(resp, ctx=""):
@@ -161,6 +322,11 @@ def user_klachten():
             if role == 'User':
                 user_id_int = safe_int(session['user_id'])
                 query = query.eq("vertegenwoordiger_id", user_id_int)
+            elif role == 'Key user':
+                # key user: enkel eigen businessunit
+                bu_name = session.get('productiebedrijf_naam')
+                if bu_name:
+                    query = query.eq("productiebedrijf", bu_name)
             response = query.execute()
             check_supabase_response(response, "fetching klachten")
             klachten = response.data if response.data else []
@@ -171,16 +337,29 @@ def user_klachten():
             if role == 'User':
                 user_id_int = safe_int(session['user_id'])
                 query = query.eq("vertegenwoordiger_id", user_id_int)
+            elif role == 'Key user':
+                bu_name = session.get('productiebedrijf_naam')
+                if bu_name:
+                    query = query.eq("productiebedrijf", bu_name)
             response = query.execute()
             check_supabase_response(response, "fetching klachten fallback")
             klachten = response.data if response.data else []
 
         # Apply filters from GET params
         klant_id = request.args.get('klant_id')
+        klant_naam = request.args.get('klant_naam')
+        if not klant_id and klant_naam:
+            try:
+                krespf = supabase.table("klant").select("klant_id").ilike("klantnaam", klant_naam).execute()
+                if krespf.data and len(krespf.data) > 0:
+                    klant_id = krespf.data[0].get('klant_id')
+            except Exception as e:
+                print(f"Klant lookup via naam mislukt: {e}")
         categorie_id = request.args.get('categorie_id')
         status = request.args.get('status')
         date_from = request.args.get('date_from')
         date_to = request.args.get('date_to')
+        businessunit_filter = request.args.get('productiebedrijf')
 
         if klant_id:
             klachten = [k for k in klachten if str(k.get('klant_id')) == str(klant_id)]
@@ -192,6 +371,8 @@ def user_klachten():
             klachten = [k for k in klachten if k.get('datum_melding') and str(k['datum_melding'])[:10] >= date_from]
         if date_to:
             klachten = [k for k in klachten if k.get('datum_melding') and str(k['datum_melding'])[:10] <= date_to]
+        if businessunit_filter:
+            klachten = [k for k in klachten if (k.get('productiebedrijf') or '').strip() == businessunit_filter.strip()]
 
         # categorieen for filter options (simple select)
         categorieen_resp = supabase.table("probleemcategorie").select("categorie_id, type").execute()
@@ -201,8 +382,21 @@ def user_klachten():
         klanten_resp = supabase.table("klant").select("klant_id, klantnaam").execute()
         check_supabase_response(klanten_resp, "fetching klanten")
         klanten = klanten_resp.data if klanten_resp.data else []
+        klanten_map = {k['klant_id']: k.get('klantnaam') for k in klanten if k.get('klant_id') is not None}
 
-        return render_template('user_klachten.html', klachten=klachten, categorieen=categorieen, klanten=klanten)
+        # dynamic businessunits from table (fallback op constante)
+        bu_resp = supabase.table("productiebedrijf").select("naam").execute()
+        check_supabase_response(bu_resp, "fetching productiebedrijven for filter")
+        dynamic_bu = [b.get('naam') for b in (bu_resp.data or []) if b.get('naam')]
+        businessunits_used = dynamic_bu if dynamic_bu else BUSINESSUNITS
+        # ensure klantnaam aanwezig
+        for k in klachten:
+            if not k.get('klant') and k.get('klant_id') in klanten_map:
+                k['klant'] = {'klantnaam': klanten_map.get(k.get('klant_id'))}
+            if not k.get('productiebedrijf'):
+                k['productiebedrijf'] = session.get('productiebedrijf_naam') or ''
+
+        return render_template('user_klachten.html', klachten=klachten, categorieen=categorieen, klanten=klanten, businessunits=businessunits_used)
     except Exception as e:
         print(f"Exception in user_klachten: {e}")
         traceback.print_exc()
@@ -253,7 +447,12 @@ def klacht_details(klacht_id):
         vertegenw = []
         if normalized_role() in ('Admin', 'Key user'):
             try:
-                reps_resp = supabase.table("gebruiker").select("gebruiker_id, naam").eq("rol", "User").execute()
+                rep_query = supabase.table("gebruiker").select("gebruiker_id, naam").eq("rol", "User")
+                if normalized_role() == 'Key user':
+                    my_pid = session.get('productiebedrijf_id')
+                    if my_pid:
+                        rep_query = rep_query.eq("productiebedrijf_id", safe_int(my_pid))
+                reps_resp = rep_query.execute()
                 check_supabase_response(reps_resp, "fetching reps")
                 vertegenw = reps_resp.data if reps_resp.data else []
             except Exception as e:
@@ -304,7 +503,7 @@ def klacht_details(klacht_id):
             except Exception as e:
                 print(f"Warning: could not fetch creator name for klacht {klacht_id}: {e}")
 
-        return render_template('klacht_details.html', klacht=klacht_data, klacht_id=klacht_id, categorieen=categorieen, statushistoriek=statushistoriek, vertegenw=vertegenw)
+        return render_template('klacht_details.html', klacht=klacht_data, klacht_id=klacht_id, categorieen=categorieen, statushistoriek=statushistoriek, vertegenw=vertegenw, businessunits=BUSINESSUNITS)
     except Exception as e:
         print(f"Exception in klacht_details: {e}")
         traceback.print_exc()
@@ -406,25 +605,52 @@ def klacht_aanmaken():
         try:
             # Haal form data op
             klant_id = request.form.get('klant_id', '').strip()
+            klant_naam = request.form.get('klant_naam', '').strip()
             categorie_id = request.form.get('categorie_id', '').strip()
             order_nummer = request.form.get('order_nummer', '').strip()
+            artikelnummer = request.form.get('artikelnummer', '').strip()
+            aantal_eenheden = request.form.get('aantal_eenheden', '').strip()
             mogelijke_oorzaak = request.form.get('mogelijke_oorzaak', '').strip()
             reden_afwijzing = request.form.get('reden_afwijzing', '').strip()
+            btw_nummer = request.form.get('btw_nummer', '').strip()
+            businessunit = request.form.get('productiebedrijf', '').strip() or (session.get('productiebedrijf_naam') or '').strip()
             notify_customer = request.form.get('notify_customer') == 'on'
             
             print("DEBUG - Form data ontvangen:")
             print(f"  Klant ID: {klant_id}")
             print(f"  Categorie ID: {categorie_id}")
             print(f"  Ordernummer: {order_nummer}")
+            print(f"  Artikelnummer: {artikelnummer}")
+            print(f"  Aantal eenheden: {aantal_eenheden}")
+            print(f"  Businessunit: {businessunit}")
             
             # Valideer verplichte velden
-            if not klant_id or not categorie_id or not order_nummer:
-                flash('Klant, categorie en ordernummer zijn verplicht', 'error')
+            if not klant_id and klant_naam:
+                # try to resolve klant_id by naam
+                try:
+                    kresp = supabase.table("klant").select("klant_id").ilike("klantnaam", klant_naam).execute()
+                    if kresp.data and len(kresp.data) > 0:
+                        klant_id = kresp.data[0].get('klant_id')
+                except Exception as ie:
+                    print(f"Klant zoeken op naam mislukt: {ie}")
+                # if nog steeds geen klant_id: automatisch toevoegen
+                if not klant_id:
+                    try:
+                        insert_resp = supabase.table("klant").insert({"klantnaam": klant_naam}).execute()
+                        check_supabase_response(insert_resp, "insert new klant by name")
+                        if insert_resp.data and len(insert_resp.data) > 0:
+                            klant_id = insert_resp.data[0].get('klant_id')
+                    except Exception as ie2:
+                        print(f"Nieuwe klant aanmaken mislukt: {ie2}")
+
+            if not klant_id or not categorie_id or not order_nummer or not artikelnummer or not aantal_eenheden or not reden_afwijzing or not businessunit:
+                flash('Klant, categorie, ordernummer, artikelnummer, aantal eenheden, businessunit en reden van afwijzing zijn verplicht', 'error')
                 return render_template(
                     'klacht_aanmaken.html',
                     user_naam=session.get('user_naam'),
                     klanten=klanten,
-                    categorieen=categorieen
+                    categorieen=categorieen,
+                    businessunits=BUSINESSUNITS
                 )
 
             # ================== AANGESCHERPT: meerdere bestanden verwerken ==================
@@ -475,12 +701,16 @@ def klacht_aanmaken():
                 'klant_id': int(klant_id),
                 'categorie_id': int(categorie_id),
                 'order_nummer': order_nummer,
+                'artikelnummer': artikelnummer,
+                'aantal_eenheden': aantal_eenheden,
                 'mogelijke_oorzaak': mogelijke_oorzaak or None,
                 'bijlages': bijlages,              # <--- hier komt de JSON in de tabel
                 'prioriteit': False,
                 'status': 'Ingediend',
                 'datum_melding': vandaag,
-                'reden_afwijzing': reden_afwijzing or None,
+                'reden_afwijzing': reden_afwijzing,
+                'btw_nummer': btw_nummer or None,
+                'productiebedrijf': businessunit,
                 'gm_opmerking': None,
                 'datum_laatst_bewerkt': vandaag
             }
@@ -488,6 +718,11 @@ def klacht_aanmaken():
             response = supabase.table("klacht").insert(nieuwe_klacht).execute()
             
             if response.data:
+                try:
+                    nieuw_id = response.data[0].get('klacht_id')
+                    notify_new_complaint(businessunit, nieuw_id)
+                except Exception as e:
+                    print(f"Error sending new complaint notifications: {e}")
                 # Notify GM or Sales manager if needed
                 # Simple notification: find all users with role Admin/Key user in same bedrijf
                 try:
@@ -520,7 +755,8 @@ def klacht_aanmaken():
         'klacht_aanmaken.html',
         user_naam=session.get('user_naam'),
         klanten=klanten,
-        categorieen=categorieen
+        categorieen=categorieen,
+        businessunits=BUSINESSUNITS
     )
 
 
@@ -532,47 +768,75 @@ def admin_dashboard():
     if normalized_role() != 'Admin':
         flash('Toegang geweigerd', 'error')
         return redirect(url_for('main.user_dashboard'))
+    notify_stale_complaints()
 
     try:
-        # Fetch representatives and all users for mapping (admins want to see all creators)
-        reps_resp = supabase.table("gebruiker").select("gebruiker_id, naam, email").execute()
+        bu_filter = request.args.get('productiebedrijf')
+        # Fetch productiebedrijven for dropdowns
+        prod_resp = supabase.table("productiebedrijf").select("productiebedrijf_id, naam").execute()
+        check_supabase_response(prod_resp, "fetch productiebedrijven")
+        productiebedrijven = prod_resp.data if prod_resp.data else []
+
+        # Fetch representatives (users) and klanten map
+        reps_resp = supabase.table("gebruiker").select("gebruiker_id, naam, email").eq("rol", "User").execute()
         check_supabase_response(reps_resp, "fetching all users")
         vertegenw = reps_resp.data if reps_resp.data else []
-
-        # Build a quick map id -> naam for fallback usage
         rep_map = {r['gebruiker_id']: r['naam'] for r in vertegenw if r.get('gebruiker_id') is not None}
+        klanten_map = {}
+        try:
+            klanten_resp = supabase.table("klant").select("klant_id, klantnaam").execute()
+            check_supabase_response(klanten_resp, "fetch klanten map")
+            klanten_list = klanten_resp.data if klanten_resp.data else []
+            klanten_map = {k['klant_id']: k.get('klantnaam') for k in klanten_list if k.get('klant_id') is not None}
+        except Exception as e:
+            print(f"Warning: could not fetch klanten map: {e}")
 
-        # Try relational select for open klachten (exclude 'Afgehandeld') and order by prioriteit desc, datum_melding desc
+        # Try relational select for open klachten (exclude 'Afgehandeld')
         klachten = []
         try:
-            klachten_resp = supabase.table("klacht").select(
+            query = supabase.table("klacht").select(
                 "*, klant:klant_id(klantnaam), categorie:probleemcategorie(type), vertegenwoordiger:vertegenwoordiger_id(naam)"
-            ).neq("status", "Afgehandeld").order("prioriteit", {"ascending": False}).order("datum_melding", {"ascending": False}).execute()
+            ).neq("status", "Afgehandeld")
+            if bu_filter:
+                query = query.eq("productiebedrijf", bu_filter)
+            klachten_resp = query.order("prioriteit", desc=True).order("datum_melding", desc=True).execute()
             check_supabase_response(klachten_resp, "fetching open klachten for admin with relations")
             klachten = klachten_resp.data if klachten_resp.data else []
         except Exception as e:
             # Fallback: fetch all, filter and sort locally
             print(f"Warning: relational select for admin klachten failed: {e}")
             traceback.print_exc()
-            fallback_resp = supabase.table("klacht").select("*").execute()
-            check_supabase_response(fallback_resp, "fetching klachten fallback for admin")
-            raw_klachten = fallback_resp.data if fallback_resp.data else []
-            filtered = [k for k in raw_klachten if (k.get('status') or '').strip() != 'Afgehandeld']
-            # Map representative name into each complaint
-            for k in filtered:
-                if not k.get('vertegenwoordiger'):
-                    rep_id = k.get('vertegenwoordiger_id')
-                    if rep_id and rep_id in rep_map:
-                        k['vertegenwoordiger'] = {'naam': rep_map.get(rep_id)}
-                    else:
-                        k['vertegenwoordiger'] = None
             try:
-                # Sort by priority then date desc
-                filtered_sorted = sorted(filtered, key=lambda x: (0 if bool(x.get('prioriteit')) else 1), reverse=False)
-                filtered_sorted = sorted(filtered_sorted, key=lambda x: (x.get('datum_melding') or ''), reverse=True)
-                klachten = filtered_sorted
-            except Exception:
-                klachten = sorted(filtered, key=lambda x: (0 if bool(x.get('prioriteit')) else 1), reverse=False)
+                fallback_query = supabase.table("klacht").select("*").neq("status", "Afgehandeld")
+                if bu_filter:
+                    fallback_query = fallback_query.eq("productiebedrijf", bu_filter)
+                fallback_resp = fallback_query.execute()
+                check_supabase_response(fallback_resp, "fetching klachten fallback for admin")
+                filtered = fallback_resp.data if fallback_resp.data else []
+                # Map representative name and klantnaam; fill businessunit if missing
+                for k in filtered:
+                    if not k.get('vertegenwoordiger'):
+                        rep_id = k.get('vertegenwoordiger_id')
+                        if rep_id and rep_id in rep_map:
+                            k['vertegenwoordiger'] = {'naam': rep_map.get(rep_id)}
+                        else:
+                            k['vertegenwoordiger'] = None
+                    if not k.get('klant') and k.get('klant_id') in klanten_map:
+                        k['klant'] = {'klantnaam': klanten_map.get(k.get('klant_id'))}
+                    if not k.get('productiebedrijf') and bu_filter:
+                        k['productiebedrijf'] = bu_filter
+                try:
+                    klachten = sorted(
+                        filtered,
+                        key=lambda x: (0 if x.get('prioriteit') else 1, str(x.get('datum_melding') or '')),
+                        reverse=False
+                    )
+                    klachten = sorted(klachten, key=lambda x: str(x.get('datum_melding') or ''), reverse=True)
+                except Exception:
+                    klachten = filtered
+            except Exception as inner_e:
+                print(f"Fallback processing failed: {inner_e}")
+                klachten = []
 
         # Ensure each result has representative object
         for k in klachten:
@@ -582,6 +846,10 @@ def admin_dashboard():
                     k['vertegenwoordiger'] = {'naam': rep_map.get(rep_id)}
                 else:
                     k['vertegenwoordiger'] = None
+            if not k.get('klant') and k.get('klant_id') in klanten_map:
+                k['klant'] = {'klantnaam': klanten_map.get(k.get('klant_id'))}
+            if not k.get('productiebedrijf') and bu_filter:
+                k['productiebedrijf'] = bu_filter
 
         total_klachten = len(klachten)
 
@@ -603,7 +871,7 @@ def admin_dashboard():
     if not isinstance(klachten, list):
         klachten = list(klachten) if klachten else []
 
-    return render_template('admin_dashboard.html', total_klachten=total_klachten, total_gebruikers=total_gebruikers, gebruikers=gebruikers, klachten=klachten, vertegenw=vertegenw)
+    return render_template('admin_dashboard.html', total_klachten=total_klachten, total_gebruikers=total_gebruikers, gebruikers=gebruikers, klachten=klachten, vertegenw=vertegenw, businessunits=BUSINESSUNITS, bu_filter=bu_filter, productiebedrijven=locals().get('productiebedrijven', []))
 
 # Update role usage when creating users
 @main.route('/admin/users', methods=['POST'])
@@ -616,23 +884,30 @@ def admin_create_user():
     email = request.form.get('email')
     rol = request.form.get('rol') or 'User'
     wachtwoord = request.form.get('wachtwoord') or 'changeme'
+    productiebedrijf_raw = request.form.get('productiebedrijf') or request.form.get('productiebedrijf_naam') or None
 
     if not naam or not email:
         flash('Naam en email zijn verplicht', 'error')
         return redirect(url_for('main.user_dashboard'))
     try:
         hashed = generate_password_hash(wachtwoord)
+        prod_id = resolve_or_create_productiebedrijf(productiebedrijf_raw)
         user_obj = {
             'naam': naam,
             'email': email,
             'rol': (rol or '').strip().capitalize(),
-            'wachtwoord': hashed
+            'wachtwoord': hashed,
+            'productiebedrijf_id': prod_id
         }
         resp = supabase.table("gebruiker").insert(user_obj).execute()
-        if resp.data:
+        check_supabase_response(resp, "admin create user")
+        if getattr(resp, "error", None):
+            msg = resp.error.message if hasattr(resp.error, "message") else str(resp.error)
+            flash(f'Fout bij aanmaken gebruiker: {msg}', 'error')
+        elif resp.data:
             flash('Gebruiker succesvol aangemaakt', 'success')
         else:
-            flash('Fout bij aanmaken gebruiker', 'error')
+            flash('Fout bij aanmaken gebruiker (onbekend)', 'error')
     except Exception as e:
         print(f"Error creating user: {e}")
         flash('Er ging iets mis bij het aanmaken van de gebruiker', 'error')
@@ -644,6 +919,74 @@ def admin_create_user():
     else:
         return redirect(url_for('main.user_dashboard'))
 
+@main.route('/admin/users/<int:user_id>/update', methods=['POST'])
+def admin_update_user(user_id):
+    if 'user_id' not in session or normalized_role() != 'Admin':
+        flash('Toegang geweigerd', 'error')
+        return redirect(url_for('main.login'))
+    rol = request.form.get('rol')
+    productiebedrijf_raw = request.form.get('productiebedrijf') or request.form.get('productiebedrijf_naam') or None
+    try:
+        update_obj = {}
+        if rol:
+            update_obj['rol'] = rol.strip().capitalize()
+        if productiebedrijf_raw is not None:
+            update_obj['productiebedrijf_id'] = resolve_or_create_productiebedrijf(productiebedrijf_raw)
+        if update_obj:
+            resp = supabase.table("gebruiker").update(update_obj).eq("gebruiker_id", user_id).execute()
+            check_supabase_response(resp, "admin update user")
+            if getattr(resp, "error", None):
+                msg = resp.error.message if hasattr(resp.error, "message") else str(resp.error)
+                flash(f'Fout bij bijwerken gebruiker: {msg}', 'error')
+            else:
+                flash('Gebruiker bijgewerkt', 'success')
+    except Exception as e:
+        print(f"admin_update_user error: {e}")
+        flash('Fout bij bijwerken gebruiker', 'error')
+    return redirect(url_for('main.admin_dashboard'))
+
+@main.route('/admin/users/<int:user_id>/delete', methods=['POST'])
+def admin_delete_user(user_id):
+    if 'user_id' not in session or normalized_role() != 'Admin':
+        flash('Toegang geweigerd', 'error')
+        return redirect(url_for('main.login'))
+    try:
+        resp = supabase.table("gebruiker").delete().eq("gebruiker_id", user_id).execute()
+        check_supabase_response(resp, "admin delete user")
+        flash('Gebruiker verwijderd', 'success')
+    except Exception as e:
+        print(f"admin_delete_user error: {e}")
+        flash('Fout bij verwijderen gebruiker', 'error')
+    return redirect(url_for('main.admin_dashboard'))
+
+@main.route('/admin/productiebedrijf', methods=['POST'])
+def admin_create_productiebedrijf():
+    if 'user_id' not in session or normalized_role() != 'Admin':
+        flash('Toegang geweigerd', 'error')
+        return redirect(url_for('main.login'))
+    naam = (request.form.get('naam') or '').strip()
+    if not naam:
+        flash('Naam van businessunit is verplicht', 'error')
+        return redirect(url_for('main.admin_dashboard'))
+    try:
+        # voorkom dubbele insert: check bestaat
+        existing = supabase.table("productiebedrijf").select("productiebedrijf_id").eq("naam", naam).execute()
+        check_supabase_response(existing, "check bestaande businessunit")
+        if existing.data:
+            flash('Businessunit bestaat al', 'info')
+            return redirect(url_for('main.admin_dashboard'))
+        resp = supabase.table("productiebedrijf").insert({"naam": naam}).execute()
+        check_supabase_response(resp, "create businessunit")
+        if getattr(resp, "error", None):
+            msg = resp.error.message if hasattr(resp.error, "message") else str(resp.error)
+            flash(f'Fout bij toevoegen businessunit: {msg}', 'error')
+        else:
+            flash('Businessunit toegevoegd', 'success')
+    except Exception as e:
+        print(f"admin_create_productiebedrijf error: {e}")
+        flash('Fout bij toevoegen businessunit', 'error')
+    return redirect(url_for('main.admin_dashboard'))
+
 @main.route('/keyuser/klacht/<int:klacht_id>/toewijzen', methods=['POST'])
 def keyuser_assign_klacht(klacht_id):
     role = normalized_role()
@@ -651,21 +994,31 @@ def keyuser_assign_klacht(klacht_id):
         flash('Toegang geweigerd', 'error')
         return redirect(url_for('main.login'))
     try:
+        # haal klacht op om businessunit te checken
+        klacht_resp = supabase.table("klacht").select("productiebedrijf").eq("klacht_id", klacht_id).execute()
+        check_supabase_response(klacht_resp, "fetch klacht for assign")
+        klacht_obj = klacht_resp.data[0] if klacht_resp.data else {}
+        if role == 'Key user':
+            my_bu = session.get('productiebedrijf_naam')
+            if my_bu and klacht_obj.get('productiebedrijf') and klacht_obj.get('productiebedrijf') != my_bu:
+                flash('Toegang geweigerd voor deze businessunit', 'error')
+                return redirect(url_for('main.klacht_details', klacht_id=klacht_id))
+
         nieuwe_rep = request.form.get('vertegenwoordiger_id')
         if not nieuwe_rep:
-            flash('Geen vertegenwoordiger geselecteerd', 'error')
+            flash('Geen verantwoordelijke geselecteerd', 'error')
             return redirect(url_for('main.klacht_details', klacht_id=klacht_id))
 
         # Check whether the selected user exists
         new_rep_resp = supabase.table("gebruiker").select("*").eq("gebruiker_id", int(nieuwe_rep)).execute()
         if not new_rep_resp.data:
-            flash('Gekozen vertegenwoordiger niet gevonden', 'error')
+            flash('Gekozen verantwoordelijke niet gevonden', 'error')
             return redirect(url_for('main.klacht_details', klacht_id=klacht_id))
         new_rep = new_rep_resp.data[0]
 
-        # Ensure target has role 'User' (vertegenwoordiger)
+        # Ensure target has role 'User' (verantwoordelijke)
         if new_rep.get('rol') != 'User':
-            flash('Selecteer een vertegenwoordiger (User)', 'error')
+            flash('Selecteer een verantwoordelijke (User)', 'error')
             return redirect(url_for('main.klacht_details', klacht_id=klacht_id))
 
         # perform the update - Key user can assign across companies
@@ -700,34 +1053,55 @@ def keyuser_dashboard():
     if normalized_role() not in ('Key user', 'Admin'):
         flash('Toegang geweigerd', 'error')
         return redirect(url_for('main.user_dashboard'))
+    notify_stale_complaints()
 
     try:
         # Fetch representatives (Users) -> change: fetch all users so we also know admins/key users who created klachten
-        reps_resp = supabase.table("gebruiker").select("gebruiker_id, naam, email").execute()
+        reps_resp = supabase.table("gebruiker").select("gebruiker_id, naam, email, productiebedrijf_id").execute()
         check_supabase_response(reps_resp, "fetching reps")
-        vertegenw = reps_resp.data if reps_resp.data else []
+        vertegenw_all = reps_resp.data if reps_resp.data else []
+        bu_name = session.get('productiebedrijf_naam')
+        bu_pid = session.get('productiebedrijf_id')
+        vertegenw = [r for r in vertegenw_all if (r.get('rol') == 'User') and (not bu_pid or r.get('productiebedrijf_id') == bu_pid)]
 
         # Build a quick map id -> naam for fallback usage
-        rep_map = {r['gebruiker_id']: r['naam'] for r in vertegenw if r.get('gebruiker_id') is not None}
+        rep_map = {r['gebruiker_id']: r['naam'] for r in vertegenw_all if r.get('gebruiker_id') is not None}
+        klanten_map = {}
+        try:
+            kresp = supabase.table("klant").select("klant_id, klantnaam").execute()
+            check_supabase_response(kresp, "fetch klanten map keyuser")
+            kl_raw = kresp.data if kresp.data else []
+            klanten_map = {k['klant_id']: k.get('klantnaam') for k in kl_raw if k.get('klant_id') is not None}
+        except Exception as e:
+            print(f"Warning: keyuser could not fetch klanten map: {e}")
+        bu_resp = supabase.table("productiebedrijf").select("naam").execute()
+        check_supabase_response(bu_resp, "fetch productiebedrijven keyuser")
+        dynamic_bu = [b.get('naam') for b in (bu_resp.data or []) if b.get('naam')]
+        businessunits_used = dynamic_bu if dynamic_bu else BUSINESSUNITS
 
         # Try relational select for open klachten (exclude 'Afgehandeld') and order by prioriteit desc, datum_melding desc
         klachten = []
         try:
-            klachten_resp = supabase.table("klacht").select(
+            query = supabase.table("klacht").select(
                 "*, klant:klant_id(klantnaam), categorie:probleemcategorie(type), vertegenwoordiger:vertegenwoordiger_id(naam)"
-            ).neq("status", "Afgehandeld").order("prioriteit", {"ascending": False}).order("datum_melding", {"ascending": False}).execute()
+            ).neq("status", "Afgehandeld")
+            if bu_name:
+                query = query.eq("productiebedrijf", bu_name)
+            klachten_resp = query.order("prioriteit", desc=True).order("datum_melding", desc=True).execute()
             check_supabase_response(klachten_resp, "fetching open klachten with relations")
             klachten = klachten_resp.data if klachten_resp.data else []
         except Exception as e:
             # If relational select fails, fallback to simpler query and sort/filter locally
             print(f"Warning: relational select for keyuser open klachten failed: {e}")
             traceback.print_exc()
-            fallback_resp = supabase.table("klacht").select("*").execute()
+            fallback_query = supabase.table("klacht").select("*").neq("status", "Afgehandeld")
+            if bu_name:
+                fallback_query = fallback_query.eq("productiebedrijf", bu_name)
+            fallback_resp = fallback_query.execute()
             check_supabase_response(fallback_resp, "fetching klachten fallback")
             # Ensure data exists before filtering
             raw_klachten = fallback_resp.data if fallback_resp.data else []
-            # Filter out 'Afgehandeld'
-            filtered = [k for k in raw_klachten if (k.get('status') or '').strip() != 'Afgehandeld']
+            filtered = raw_klachten
             # Add representative name using rep_map
             for k in filtered:
                 if not k.get('vertegenwoordiger'):
@@ -736,11 +1110,19 @@ def keyuser_dashboard():
                         k['vertegenwoordiger'] = {'naam': rep_map.get(rep_id)}
                     else:
                         k['vertegenwoordiger'] = None
+                if not k.get('klant') and k.get('klant_id') in klanten_map:
+                    k['klant'] = {'klantnaam': klanten_map.get(k.get('klant_id'))}
             # Sort by prioriteit (True first) then datum_melding DESC
             try:
-                filtered_sorted = sorted(filtered, key=lambda x: (0 if bool(x.get('prioriteit')) else 1), reverse=False)
-                filtered_sorted = sorted(filtered_sorted, key=lambda x: (x.get('datum_melding') or ''), reverse=True)
-                klachten = filtered_sorted
+                klachten = sorted(
+                    filtered,
+                    key=lambda x: (
+                        0 if bool(x.get('prioriteit')) else 1,
+                        str(x.get('datum_melding') or '')
+                    ),
+                    reverse=False
+                )
+                klachten = sorted(klachten, key=lambda x: str(x.get('datum_melding') or ''), reverse=True)
             except Exception:
                 klachten = sorted(filtered, key=lambda x: (0 if bool(x.get('prioriteit')) else 1), reverse=False)
 
@@ -752,6 +1134,8 @@ def keyuser_dashboard():
                     k['vertegenwoordiger'] = {'naam': rep_map.get(rep_id)}
                 else:
                     k['vertegenwoordiger'] = None
+            if not k.get('klant') and k.get('klant_id') in klanten_map:
+                k['klant'] = {'klantnaam': klanten_map.get(k.get('klant_id'))}
 
         total_klachten = len(klachten)
     except Exception as e:
@@ -766,7 +1150,7 @@ def keyuser_dashboard():
         klachten = list(klachten) if klachten else []
 
     print(f"DEBUG: keyuser_dashboard found {len(klachten)} klachten and {len(vertegenw)} vertegenw")
-    return render_template('keyuser_dashboard.html', total_klachten=total_klachten, klachten=klachten, vertegenw=vertegenw)
+    return render_template('keyuser_dashboard.html', total_klachten=total_klachten, klachten=klachten, vertegenw=vertegenw, businessunits=businessunits_used)
 
 # Helper: return normalized role as "User", "Key user", "Admin"
 def normalized_role():
@@ -793,6 +1177,11 @@ def can_view_klacht(klacht, user_id, user_role):
     if role_norm == 'Admin':
         return True
     if role_norm == 'Key user':
+        # Key user mag enkel binnen eigen businessunit
+        bu = (klacht.get('productiebedrijf') or '').strip()
+        my_bu = (session.get('productiebedrijf_naam') or '').strip()
+        if my_bu and bu and bu != my_bu:
+            return False
         return True
     if role_norm == 'User':
         return klacht.get('vertegenwoordiger_id') == user_id
@@ -801,6 +1190,11 @@ def can_view_klacht(klacht, user_id, user_role):
 def can_edit_klacht(klacht, user_id, user_role):
     role_norm = (user_role or '').strip().capitalize()
     if role_norm in ('Admin', 'Key user'):
+        if role_norm == 'Key user':
+            bu = (klacht.get('productiebedrijf') or '').strip()
+            my_bu = (session.get('productiebedrijf_naam') or '').strip()
+            if my_bu and bu and bu != my_bu:
+                return False
         return True
     return klacht.get('vertegenwoordiger_id') == user_id
 
@@ -857,14 +1251,18 @@ def klacht_bewerken(klacht_id):
 
         # Haal form data op
         order_nummer = request.form.get('order_nummer', '').strip()
+        artikelnummer = request.form.get('artikelnummer', '').strip()
+        aantal_eenheden = request.form.get('aantal_eenheden', '').strip()
         categorie_id = request.form.get('categorie_id', '').strip()
         mogelijke_oorzaak = request.form.get('mogelijke_oorzaak', '').strip()
         reden_afwijzing = request.form.get('reden_afwijzing', '').strip()
+        btw_nummer = request.form.get('btw_nummer', '').strip()
+        businessunit = request.form.get('productiebedrijf', '').strip() or (session.get('productiebedrijf_naam') or '').strip()
         vertegenwoordiger_id = request.form.get('vertegenwoordiger_id', '').strip()  # nieuw
 
-        # Valideer categorie_id
-        if not categorie_id:
-            flash('Categorie is verplicht', 'error')
+        # Valideer verplichte velden
+        if not categorie_id or not order_nummer or not artikelnummer or not aantal_eenheden or not reden_afwijzing:
+            flash('Categorie, ordernummer, artikelnummer, aantal eenheden en reden van afwijzing zijn verplicht', 'error')
             return redirect(url_for('main.klacht_details', klacht_id=klacht_id))
 
         # Controleer of categorie_id bestaat
@@ -874,10 +1272,12 @@ def klacht_bewerken(klacht_id):
             return redirect(url_for('main.klacht_details', klacht_id=klacht_id))
 
         # Haal bestaande klacht met bijlages
-        klacht_get_resp = supabase.table("klacht").select("bijlages").eq("klacht_id", klacht_id).execute()
+        klacht_get_resp = supabase.table("klacht").select("*").eq("klacht_id", klacht_id).execute()
         existing_bijlages = []
+        klacht_row = {}
         if klacht_get_resp.data and len(klacht_get_resp.data) > 0:
-            existing_bijlages = klacht_get_resp.data[0].get('bijlages') or []
+            klacht_row = klacht_get_resp.data[0]
+            existing_bijlages = klacht_row.get('bijlages') or []
         else:
             existing_bijlages = []
 
@@ -914,9 +1314,13 @@ def klacht_bewerken(klacht_id):
         # Build update_data — include status/prioriteit BEFORE update if manager
         update_data = {
             'order_nummer': order_nummer or None,
+            'artikelnummer': artikelnummer or None,
+            'aantal_eenheden': aantal_eenheden or None,
             'categorie_id': int(categorie_id),
             'mogelijke_oorzaak': mogelijke_oorzaak or None,
             'reden_afwijzing': reden_afwijzing or None,
+            'btw_nummer': btw_nummer or None,
+            'productiebedrijf': businessunit or klacht_row.get('productiebedrijf'),
             'datum_laatst_bewerkt': datetime.utcnow().isoformat(),
             'bijlages': existing_bijlages if existing_bijlages else None
         }
@@ -1070,41 +1474,61 @@ def klachten_export():
                     return ''
             return v or ''
 
-        # Build CSV in memory
-        output = io.StringIO()
-        writer = csv.writer(output)
+        # Build Excel workbook
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Klachten"
         header = [
-            'klacht_id',
-            'vertegenwoordiger_id',
-            'vertegenwoordiger_naam',
-            'klant_id',
-            'klantnaam',
-            'order_nummer',
-            'categorie_id',
-            'categorie_type',
-            'status',
-            'prioriteit',
-            'datum_melding'
+            'Klacht ID',
+            'Verantwoordelijke ID',
+            'Verantwoordelijke naam',
+            'Klant ID',
+            'Klantnaam',
+            'Ordernummer',
+            'Artikelnummer',
+            'Aantal eenheden',
+            'Categorie ID',
+            'Categorie type',
+            'Status',
+            'Prioriteit',
+            'Datum melding',
+            'Businessunit',
+            'BTW-nummer',
+            'Bijlagen (URL)',
+            'Eerste afbeelding'
         ]
-        writer.writerow(header)
+        ws.append(header)
 
-        for k in klachten:
+        # set column widths for readability
+        widths = [12, 18, 24, 12, 24, 16, 16, 14, 12, 18, 12, 12, 16, 16, 18, 40, 18]
+        for i, w in enumerate(widths, start=1):
+            ws.column_dimensions[chr(64 + i)].width = w
+
+        for idx, k in enumerate(klachten, start=2):  # data rows start at 2
             try:
                 klacht_id = k.get('klacht_id')
                 verteg_id = k.get('vertegenwoordiger_id')
                 vertegenw_naam = ''
                 if isinstance(k.get('vertegenwoordiger'), dict):
                     vertegenw_naam = k.get('vertegenwoordiger').get('naam') or ''
-                # if vertegenw not present, try to fetch or fallback empty
-                if not vertegenw_naam and verteg_id:
-                    vertegenw_naam = ''  # avoid fetching inside loop for performance
-
                 klant_id_val = k.get('klant_id')
                 klantnaam = k.get('klant', {}).get('klantnaam') if isinstance(k.get('klant'), dict) else ''
                 cat_id = k.get('categorie_id')
                 cat_type = k.get('categorie', {}).get('type') if isinstance(k.get('categorie'), dict) else ''
                 prioriteit = k.get('prioriteit')
-                # Ensure proper string values and avoid nested dicts
+                bijlage_urls = []
+                first_image_bytes = None
+                if isinstance(k.get('bijlages'), list):
+                    for b in k.get('bijlages'):
+                        b_url = b.get('url') if isinstance(b, dict) else (b if isinstance(b, str) else '')
+                        if b_url:
+                            bijlage_urls.append(b_url)
+                            if not first_image_bytes:
+                                # try fetch image only for first image-like url
+                                ct = b.get('content_type') if isinstance(b, dict) else ''
+                                if (ct and ct.startswith('image')) or b_url.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')) or b_url.startswith('data:image'):
+                                    first_image_bytes = fetch_image_bytes(b_url)
+
                 row = [
                     klacht_id,
                     verteg_id,
@@ -1112,25 +1536,50 @@ def klachten_export():
                     klant_id_val,
                     klantnaam,
                     k.get('order_nummer') or '',
+                    k.get('artikelnummer') or '',
+                    k.get('aantal_eenheden') or '',
                     cat_id,
                     cat_type,
                     k.get('status') or '',
-                    str(prioriteit),
-                    k.get('datum_melding') or ''
+                    'Ja' if prioriteit else 'Nee',
+                    k.get('datum_melding') or '',
+                    k.get('productiebedrijf') or '',
+                    k.get('btw_nummer') or '',
+                    "\n".join(bijlage_urls)
                 ]
-                writer.writerow([str(item) for item in row])
+                ws.append(row)
+
+                # embed first image if available
+                if first_image_bytes:
+                    try:
+                        img = XLImage(io.BytesIO(first_image_bytes))
+                        img.height = 80
+                        img.width = 80
+                        cell_ref = f"Q{idx}"
+                        ws.add_image(img, cell_ref)
+                        ws.row_dimensions[idx].height = 70
+                    except Exception as ie:
+                        print(f"Embed image failed for klacht {klacht_id}: {ie}")
             except Exception as e:
                 print(f"Warning: failed to write row for klacht {k.get('klacht_id')}: {e}")
-                # continue with rest
 
-        csv_data = output.getvalue()
-        output.close()
+        # Add table styling
+        try:
+            table = Table(displayName="KlachtenTable", ref=f"A1:Q{ws.max_row}")
+            style = TableStyleInfo(name="TableStyleMedium9", showFirstColumn=False, showLastColumn=False, showRowStripes=True, showColumnStripes=False)
+            table.tableStyleInfo = style
+            ws.add_table(table)
+        except Exception as e:
+            print(f"Warning: could not add table styling: {e}")
 
         # Build response with timestamped filename
-        filename = f"klachten_export_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.csv"
-        response = make_response(csv_data)
+        bio = io.BytesIO()
+        wb.save(bio)
+        bio.seek(0)
+        filename = f"klachten_export_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        response = make_response(bio.getvalue())
         response.headers['Content-Disposition'] = f'attachment; filename={filename}'
-        response.headers['Content-Type'] = 'text/csv; charset=utf-8'
+        response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         return response
 
     except Exception as e:
@@ -1138,16 +1587,3 @@ def klachten_export():
         traceback.print_exc()
         flash('Er ging iets mis bij het exporteren van klachten', 'error')
         return redirect(url_for('main.user_klachten'))
-
-def check_supabase_response(resp, ctx=""):
-	"""Check supabase response for errors and raise if present (or return data)."""
-	if resp is None:
-		raise Exception(f"Empty response from Supabase at {ctx}")
-	# supabase-python response has .error attribute; sometimes None, sometimes dict
-	err = getattr(resp, 'error', None)
-	if err:
-		# try extract message if present
-		msg = err.message if hasattr(err, 'message') else repr(err)
-		print(f"Supabase error in {ctx}: {msg}")
-		raise Exception(f"Supabase error in {ctx}: {msg}")
-	return resp

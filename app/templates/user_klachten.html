@@ -2,6 +2,7 @@
 <html>
 <head>
     <title>Mijn Klachten</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         body { 
             font-family: Arial, sans-serif; 
@@ -20,6 +21,8 @@
             justify-content: space-between; 
             align-items: center; 
             margin-bottom: 30px; 
+            gap: 12px;
+            flex-wrap: wrap;
         }
         .back-button { 
             background: #10b981; 
@@ -30,170 +33,98 @@
             font-weight: bold;
             transition: all 0.3s ease;
         }
-        .back-button:hover {
-            background: #059669;
-            transform: translateY(-2px);
-        }
-        .header h1 {
-            color: white;
-            margin: 0;
-        }
-        .klachten-table { 
-            width: 100%; 
-            border-collapse: collapse; 
-            margin-top: 20px;
-            background: white;
-            border-radius: 16px;
-            overflow: hidden;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        }
-        .klachten-table th, .klachten-table td { 
-            padding: 16px; 
-            text-align: left; 
-            border-bottom: 1px solid #e5e7eb; 
-            color: #1f2937;
-        }
-        .klachten-table th { 
-            background: #10b981; 
-            color: white;
-            font-weight: bold;
-        }
-        .klachten-table tr:hover {
-            background: #f0fdf4;
-        }
-        .status-badge { 
-            padding: 8px 12px; 
-            border-radius: 12px; 
-            font-size: 12px; 
-            font-weight: bold; 
-        }
-        .status-Ingediend { background: #fff3cd; color: #856404; }
-        .status-Goedgekeurd { background: #d1ecf1; color: #0c5460; }
-        .status-Afgewezen { background: #f8d7da; color: #721c24; }
-        .status-Inbehandeling { background: #d4edda; color: #155724; }
-        .status-Afgehandeld { background: #e2e3e5; color: #383d41; }
-        .action-link { 
-            background: #10b981;
-            color: white;
-            padding: 8px 16px;
-            text-decoration: none; 
-            border-radius: 8px;
-            font-size: 14px;
-            transition: all 0.3s ease;
-            display: inline-block;
-        }
-        .action-link:hover {
-            background: #059669;
-            transform: translateY(-2px);
-        }
-        .delete-btn {
-            background: #095724;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: all 0.3s ease;
-        }
-        .delete-btn:hover {
-            background: #13743a;
-            transform: translateY(-2px);
-        }
-        .no-klachten { 
-            text-align: center; 
-            padding: 60px; 
-            color: white;
-            background: white;
-            border-radius: 16px;
-            color: #1f2937;
-        }
-        .no-klachten button {
-            background: #10b981;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 12px;
-            cursor: pointer;
-            font-weight: bold;
-            margin-top: 15px;
-            transition: all 0.3s ease;
-        }
-        .no-klachten button:hover {
-            background: #059669;
-            transform: translateY(-2px);
-        }
-        .flash-messages { 
-            margin: 20px 0; 
-        }
-        .alert {
-            padding: 15px;
-            border-radius: 12px;
-            margin-bottom: 15px;
-            text-align: center;
-        }
-        .error { 
-            background: #fee2e2;
-            color: #dc2626;
-            border: 1px solid #fecaca;
-        }
-        .success { 
-            background: #dcfce7;
-            color: #16a34a;
-            border: 1px solid #bbf7d0;
-        }
-        .priority-high {
-            color: #dc2626;
-            font-weight: bold;
-            background: #fee2e2;
-            padding: 6px 12px;
-            border-radius: 8px;
-            display: inline-block;
-        }
-        .priority-normal {
-            color: #6b7280;
-            background: #f3f4f6;
-            padding: 6px 12px;
-            border-radius: 8px;
-            display: inline-block;
-        }
+        .back-button:hover { background: #059669; transform: translateY(-2px); }
+        .header h1 { color: white; margin: 0; }
+        .klachten-table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); }
+        .klachten-table th, .klachten-table td { padding: 16px; text-align: left; border-bottom: 1px solid #e5e7eb; color: #1f2937; }
+        .klachten-table th { background: #10b981; color: white; font-weight: bold; }
+        .klachten-table tr:hover { background: #f0fdf4; }
+        .status-badge { padding: 8px 12px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+        .status-Ingediend { background: #fef08a; color: #854d0e; }
+        .status-Inbehandeling { background: #dbeafe; color: #1d4ed8; }
+        .status-Afgehandeld { background: #bbf7d0; color: #166534; }
+        .status-Afgewezen { background: #fecdd3; color: #9f1239; }
+        .action-link { background: #10b981; color: white; padding: 8px 16px; text-decoration: none; border-radius: 8px; font-size: 14px; transition: all 0.3s ease; display: inline-block; }
+        .action-link:hover { background: #059669; transform: translateY(-2px); }
+        .delete-btn { background: #095724; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; transition: all 0.3s ease; }
+        .delete-btn:hover { background: #13743a; transform: translateY(-2px); }
+        .no-klachten { text-align: center; padding: 60px; background: white; border-radius: 16px; color: #1f2937; }
+        .no-klachten button { background: #10b981; color: white; border: none; padding: 12px 24px; border-radius: 12px; cursor: pointer; font-weight: bold; margin-top: 15px; transition: all 0.3s ease; }
+        .no-klachten button:hover { background: #059669; transform: translateY(-2px); }
+        .flash-messages { margin: 20px 0; }
+        .alert { padding: 15px; border-radius: 12px; margin-bottom: 15px; text-align: center; }
+        .error { background: #fee2e2; color: #dc2626; border: 1px solid #fecaca; }
+        .success { background: #dcfce7; color: #16a34a; border: 1px solid #bbf7d0; }
+        .priority-high { color: #b91c1c; font-weight: bold; background: #fecaca; padding: 6px 12px; border-radius: 8px; display: inline-block; border: 1px solid #ef4444; }
+        .priority-normal { color: #6b7280; background: #f3f4f6; padding: 6px 12px; border-radius: 8px; display: inline-block; }
+        .filters { display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; margin-bottom:12px; }
+        .filter-field { display:flex; flex-direction:column; gap:4px; color:#fff; font-size:12px; min-width:180px; }
+        .filter-field input, .filter-field select { padding:8px 10px; border-radius:8px; border:1px solid #d1d5db; }
+        @media (max-width: 768px) { .klachten-table th, .klachten-table td { padding: 12px; font-size: 14px; } }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <a href="{{ url_for('main.user_dashboard') }}" class="back-button">← Terug naar Dashboard</a>
+            <a href="{{ url_for('main.user_dashboard') }}" class="back-button">Terug naar Dashboard</a>
             <h1>Mijn Klachten</h1>
         </div>
 
-        <!-- Filters: visible to managers/admin and general users (user filters apply to own) -->
-        <form method="GET" style="margin-bottom: 12px; display:flex; gap:10px; align-items:center;">
-            <select name="klant_id">
-                <option value="">Alle klanten</option>
-                {% for klant in klanten %}
-                    <option value="{{ klant.klant_id }}" {% if request.args.get('klant_id') == klant.klant_id|string %}selected{% endif %}>{{ klant.klantnaam }}</option>
-                {% endfor %}
-            </select>
-            <select name="categorie_id">
-                <option value="">Alle categorieën</option>
-                {% for categorie in categorieen %}
-                    <option value="{{ categorie.categorie_id }}" {% if request.args.get('categorie_id') == categorie.categorie_id|string %}selected{% endif %}>{{ categorie.type }}</option>
-                {% endfor %}
-            </select>
-            <select name="status">
-                <option value="">Alle statussen</option>
-                <option value="Ingediend" {% if request.args.get('status') == 'Ingediend' %}selected{% endif %}>Ingediend</option>
-                <option value="Goedgekeurd" {% if request.args.get('status') == 'Goedgekeurd' %}selected{% endif %}>Goedgekeurd</option>
-                <option value="Afgewezen" {% if request.args.get('status') == 'Afgewezen' %}selected{% endif %}>Afgewezen</option>
-                <option value="In behandeling" {% if request.args.get('status') == 'In behandeling' %}selected{% endif %}>In behandeling</option>
-                <option value="Afgehandeld" {% if request.args.get('status') == 'Afgehandeld' %}selected{% endif %}>Afgehandeld</option>
-            </select>
-            <input type="date" name="date_from" value="{{ request.args.get('date_from') or '' }}">
-            <input type="date" name="date_to" value="{{ request.args.get('date_to') or '' }}">
-            <button type="submit" class="action-link">Filter</button>
+        <form method="GET" class="filters">
+            <div class="filter-field">
+                <label for="klant_filter">Klant</label>
+                <input type="text" id="klant_filter" name="klant_naam" list="klanten_filter" value="{{ request.args.get('klant_naam') or '' }}" placeholder="Begin te typen...">
+                <input type="hidden" name="klant_id" id="klant_id_filter" value="{{ request.args.get('klant_id') or '' }}">
+                <datalist id="klanten_filter">
+                    {% for klant in klanten %}
+                        <option value="{{ klant.klantnaam }}" data-id="{{ klant.klant_id }}"></option>
+                    {% endfor %}
+                </datalist>
+            </div>
+            <div class="filter-field">
+                <label for="categorie_id">Categorie</label>
+                <select name="categorie_id" id="categorie_id">
+                    <option value="">Alle categorieën</option>
+                    {% for categorie in categorieen %}
+                        <option value="{{ categorie.categorie_id }}" {% if request.args.get('categorie_id') == categorie.categorie_id|string %}selected{% endif %}>{{ categorie.type }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-field">
+                <label for="productiebedrijf">Businessunit</label>
+                <select name="productiebedrijf" id="productiebedrijf">
+                    <option value="">Alle businessunits</option>
+                    {% for bu in businessunits %}
+                        <option value="{{ bu }}" {% if request.args.get('productiebedrijf') == bu %}selected{% endif %}>{{ bu }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-field">
+                <label for="status">Status</label>
+                <select name="status" id="status">
+                    <option value="">Alle statussen</option>
+                    <option value="Ingediend" {% if request.args.get('status') == 'Ingediend' %}selected{% endif %}>Ingediend</option>
+                    <option value="Goedgekeurd" {% if request.args.get('status') == 'Goedgekeurd' %}selected{% endif %}>Goedgekeurd</option>
+                    <option value="Afgewezen" {% if request.args.get('status') == 'Afgewezen' %}selected{% endif %}>Afgewezen</option>
+                    <option value="In behandeling" {% if request.args.get('status') == 'In behandeling' %}selected{% endif %}>In behandeling</option>
+                    <option value="Afgehandeld" {% if request.args.get('status') == 'Afgehandeld' %}selected{% endif %}>Afgehandeld</option>
+                </select>
+            </div>
+            <div class="filter-field">
+                <label for="date_from">Begindatum</label>
+                <input type="date" id="date_from" name="date_from" value="{{ request.args.get('date_from') or '' }}">
+            </div>
+            <div class="filter-field">
+                <label for="date_to">Einddatum</label>
+                <input type="date" id="date_to" name="date_to" value="{{ request.args.get('date_to') or '' }}">
+            </div>
+            <div class="filter-field" style="min-width:auto;">
+                <button type="submit" class="action-link" style="padding:10px 16px;">Filter</button>
+            </div>
             {% if session.get('user_rol') in ['Admin', 'Key user'] %}
-                <!-- Gebruik directe pad en voeg query-string toe als deze aanwezig is -->
-                <a href="/user/klachten/export{% if request.query_string %}?{{ request.query_string.decode('utf-8') }}{% endif %}" class="action-link" style="margin-left:8px">📥 Export CSV</a>
+            <div class="filter-field" style="min-width:auto;">
+                <a href="/user/klachten/export{% if request.query_string %}?{{ request.query_string.decode('utf-8') }}{% endif %}" class="action-link" style="padding:10px 16px;">Export CSV</a>
+            </div>
             {% endif %}
         </form>
 
@@ -212,7 +143,9 @@
                 <thead>
                     <tr>
                         <th>Klacht ID</th>
-                        <th>Datum Melding</th>
+                        <th>Datum</th>
+                        <th>Klant</th>
+                        <th>Businessunit</th>
                         <th>Status</th>
                         <th>Prioriteit</th>
                         <th>Acties</th>
@@ -224,7 +157,6 @@
                         <td><strong>#{{ klacht.klacht_id }}</strong></td>
                         <td>
                             {% if klacht.datum_melding %}
-                                {# if datum string has T, show date-part, else show first 10 chars or the whole value #}
                                 {% if 'T' in klacht.datum_melding %}
                                     {{ klacht.datum_melding.split('T')[0] }}
                                 {% else %}
@@ -234,6 +166,8 @@
                                 Onbekend
                             {% endif %}
                         </td>
+                        <td>{{ klacht.klant.klantnaam if klacht.klant else '' }}</td>
+                        <td>{{ klacht.productiebedrijf or 'Onbekend' }}</td>
                         <td>
                             <span class="status-badge status-{{ klacht.status.replace(' ', '') }}">
                                 {{ klacht.status }}
@@ -241,19 +175,16 @@
                         </td>
                         <td>
                             {% if klacht.prioriteit %}
-                                <span class="priority-high">⚠️ Hoog</span>
+                                <span class="priority-high">Hoog</span>
                             {% else %}
                                 <span class="priority-normal">Normaal</span>
                             {% endif %}
                         </td>
                         <td>
-                            <a href="{{ url_for('main.klacht_details', klacht_id=klacht.klacht_id) }}" class="action-link">
-                                ℹ️ Meer info
-                            </a>
+                            <a href="{{ url_for('main.klacht_details', klacht_id=klacht.klacht_id) }}" class="action-link">Meer info</a>
                             <form method="POST" action="{{ url_for('main.klacht_verwijderen', klacht_id=klacht.klacht_id) }}" style="display: inline;">
-                                <button type="submit" class="delete-btn" 
-                                        onclick="return confirm('Weet je zeker dat je klacht #{{ klacht.klacht_id }} wilt verwijderen?')">
-                                    🗑️ Verwijderen
+                                <button type="submit" class="delete-btn" onclick="return confirm('Weet je zeker dat je klacht #{{ klacht.klacht_id }} wilt verwijderen?')">
+                                    Verwijderen
                                 </button>
                             </form>
                         </td>
@@ -270,5 +201,20 @@
             </div>
         {% endif %}
     </div>
+
+    <script>
+        const klantInput = document.getElementById('klant_filter');
+        const klantHidden = document.getElementById('klant_id_filter');
+        const klantList = document.getElementById('klanten_filter');
+        function syncKlant() {
+            if (!klantInput || !klantList) return;
+            const match = Array.from(klantList.options).find(opt => opt.value === klantInput.value);
+            klantHidden.value = match ? (match.dataset.id || '') : '';
+        }
+        if (klantInput) {
+            klantInput.addEventListener('change', syncKlant);
+            klantInput.addEventListener('blur', syncKlant);
+        }
+    </script>
 </body>
 </html>
