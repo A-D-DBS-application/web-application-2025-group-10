@@ -48,7 +48,8 @@ class Klant(db.Model):
     klantnaam = db.Column(db.Text, nullable=False)
     contactpersoon = db.Column(db.Text)
     email = db.Column(db.Text)
-    telefoon = telefoon = db.Column(db.Text)
+    telefoon =  db.Column(db.Text)
+    adres = db.Column(db.Text)
 
     # Relaties naar orders en klachten
     orders = db.relationship('Order', backref='klant', lazy=True)
