@@ -307,6 +307,17 @@ def check_supabase_response(resp, ctx=""):
         raise Exception(f"Supabase error in {ctx}: {msg}")
     return resp
 
+# Helper: fetch businessunit-namen vanuit Supabase (fallback op constante lijst)
+def get_businessunits_list():
+    try:
+        resp = supabase.table("productiebedrijf").select("naam").order("naam").execute()
+        check_supabase_response(resp, "fetch businessunits list")
+        names = [b.get('naam') for b in (resp.data or []) if b.get('naam')]
+        return names if names else BUSINESSUNITS
+    except Exception as e:
+        print(f"Warning: kon businessunits niet ophalen: {e}")
+        return BUSINESSUNITS
+
 @main.route('/user/klachten')
 def user_klachten():
     if 'user_id' not in session:
@@ -503,7 +514,7 @@ def klacht_details(klacht_id):
             except Exception as e:
                 print(f"Warning: could not fetch creator name for klacht {klacht_id}: {e}")
 
-        return render_template('klacht_details.html', klacht=klacht_data, klacht_id=klacht_id, categorieen=categorieen, statushistoriek=statushistoriek, vertegenw=vertegenw, businessunits=BUSINESSUNITS)
+        return render_template('klacht_details.html', klacht=klacht_data, klacht_id=klacht_id, categorieen=categorieen, statushistoriek=statushistoriek, vertegenw=vertegenw, businessunits=get_businessunits_list())
     except Exception as e:
         print(f"Exception in klacht_details: {e}")
         traceback.print_exc()
@@ -650,7 +661,7 @@ def klacht_aanmaken():
                     user_naam=session.get('user_naam'),
                     klanten=klanten,
                     categorieen=categorieen,
-                    businessunits=BUSINESSUNITS
+                    businessunits=get_businessunits_list()
                 )
 
             # ================== AANGESCHERPT: meerdere bestanden verwerken ==================
@@ -756,7 +767,7 @@ def klacht_aanmaken():
         user_naam=session.get('user_naam'),
         klanten=klanten,
         categorieen=categorieen,
-        businessunits=BUSINESSUNITS
+        businessunits=get_businessunits_list()
     )
 
 
@@ -769,6 +780,7 @@ def admin_dashboard():
         flash('Toegang geweigerd', 'error')
         return redirect(url_for('main.user_dashboard'))
     notify_stale_complaints()
+    businessunits_used = get_businessunits_list()
 
     try:
         bu_filter = request.args.get('productiebedrijf')
@@ -776,6 +788,16 @@ def admin_dashboard():
         prod_resp = supabase.table("productiebedrijf").select("productiebedrijf_id, naam").execute()
         check_supabase_response(prod_resp, "fetch productiebedrijven")
         productiebedrijven = prod_resp.data if prod_resp.data else []
+        businessunits_used = [p.get('naam') for p in productiebedrijven if p.get('naam')] or get_businessunits_list()
+        # map id -> naam for snelle lookup en zorg voor consistente ints
+        bu_map = {}
+        for p in productiebedrijven:
+            try:
+                pid_int = safe_int(p.get('productiebedrijf_id'))
+            except Exception:
+                pid_int = p.get('productiebedrijf_id')
+            if pid_int is not None:
+                bu_map[pid_int] = p.get('naam')
 
         # Fetch representatives (users) and klanten map
         reps_resp = supabase.table("gebruiker").select("gebruiker_id, naam, email").eq("rol", "User").execute()
@@ -857,6 +879,11 @@ def admin_dashboard():
         gebruikers_resp = supabase.table("gebruiker").select("gebruiker_id, naam, email, rol").execute()
         check_supabase_response(gebruikers_resp, "fetching users for admin")
         gebruikers = gebruikers_resp.data if gebruikers_resp.data else []
+        # verrijk gebruikers met int-id en naam van businessunit
+        for g in gebruikers:
+            pid = safe_int(g.get('productiebedrijf_id'))
+            g['productiebedrijf_id'] = pid
+            g['productiebedrijf_naam'] = bu_map.get(pid) if pid is not None else ''
         total_gebruikers = len(gebruikers)
     except Exception as e:
         print(f"Error admin stats: {e}")
@@ -871,7 +898,7 @@ def admin_dashboard():
     if not isinstance(klachten, list):
         klachten = list(klachten) if klachten else []
 
-    return render_template('admin_dashboard.html', total_klachten=total_klachten, total_gebruikers=total_gebruikers, gebruikers=gebruikers, klachten=klachten, vertegenw=vertegenw, businessunits=BUSINESSUNITS, bu_filter=bu_filter, productiebedrijven=locals().get('productiebedrijven', []))
+    return render_template('admin_dashboard.html', total_klachten=total_klachten, total_gebruikers=total_gebruikers, gebruikers=gebruikers, klachten=klachten, vertegenw=vertegenw, businessunits=businessunits_used, bu_filter=bu_filter, productiebedrijven=locals().get('productiebedrijven', []))
 
 # Update role usage when creating users
 @main.route('/admin/users', methods=['POST'])
@@ -925,13 +952,18 @@ def admin_update_user(user_id):
         flash('Toegang geweigerd', 'error')
         return redirect(url_for('main.login'))
     rol = request.form.get('rol')
-    productiebedrijf_raw = request.form.get('productiebedrijf') or request.form.get('productiebedrijf_naam') or None
+    productiebedrijf_field = request.form.get('productiebedrijf')
+    productiebedrijf_raw = request.form.get('productiebedrijf_naam') if productiebedrijf_field is None else productiebedrijf_field
     try:
         update_obj = {}
         if rol:
             update_obj['rol'] = rol.strip().capitalize()
         if productiebedrijf_raw is not None:
-            update_obj['productiebedrijf_id'] = resolve_or_create_productiebedrijf(productiebedrijf_raw)
+            # "" betekent expliciet leegmaken
+            if str(productiebedrijf_raw).strip() == '':
+                update_obj['productiebedrijf_id'] = None
+            else:
+                update_obj['productiebedrijf_id'] = resolve_or_create_productiebedrijf(productiebedrijf_raw)
         if update_obj:
             resp = supabase.table("gebruiker").update(update_obj).eq("gebruiker_id", user_id).execute()
             check_supabase_response(resp, "admin update user")
@@ -1198,29 +1230,10 @@ def can_edit_klacht(klacht, user_id, user_role):
         return True
     return klacht.get('vertegenwoordiger_id') == user_id
 
-# Simple send_email helper (will fallback to print; configure env for SMTP)
+# Simple send_email helper (temporarily disabled to avoid sending mails during development)
 def send_email(subject, body, to):
-    smtp_host = os.environ.get('SMTP_HOST')
-    smtp_port = int(os.environ.get('SMTP_PORT', 587))
-    smtp_user = os.environ.get('SMTP_USER')
-    smtp_pass = os.environ.get('SMTP_PASS')
-    if not smtp_host or not smtp_user or not smtp_pass:
-        print(f"[EMAIL] to={to} subject={subject} body={body}")
-        return False
-    try:
-        msg = EmailMessage()
-        msg['Subject'] = subject
-        msg['From'] = smtp_user
-        msg['To'] = to if isinstance(to, str) else ', '.join(to)
-        msg.set_content(body)
-        with smtplib.SMTP(smtp_host, smtp_port) as s:
-            s.starttls()
-            s.login(smtp_user, smtp_pass)
-            s.send_message(msg)
-        return True
-    except Exception as e:
-        print(f"Error sending email: {e}")
-        return False
+    print(f"[EMAIL DISABLED] subject={subject} to={to} body={body}")
+    return False
 
 @main.route('/user/klacht/<int:klacht_id>/bewerken', methods=['POST'])
 def klacht_bewerken(klacht_id):

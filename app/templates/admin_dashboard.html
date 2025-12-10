@@ -11,15 +11,18 @@
         .card { background: white; color: #1f2937; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
         .grid { display:grid; grid-template-columns: 1fr 1fr; gap:20px; align-items:start; }
         button { border:none; outline:none; }
-        .button { background:#10b981; color:white; padding:10px 16px; border-radius:8px; text-decoration:none; display:inline-block; min-width:160px; text-align:center; border:none; outline:none; font-weight:600; cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,0.15); }
+        .btn { background:linear-gradient(135deg,#12c68b,#0ea56f); color:white; border:none; outline:none; border-radius:10px; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; font-weight:700; letter-spacing:0.1px; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,0.18); width:240px; height:48px; padding:0 18px; transition: transform 120ms ease, box-shadow 120ms ease, background 160ms ease; }
+        .btn:hover { transform: translateY(-1px); box-shadow:0 4px 10px rgba(0,0,0,0.2); background:linear-gradient(135deg,#0fb57b,#0d9664); }
+        .btn:active { transform: translateY(0); box-shadow:0 2px 6px rgba(0,0,0,0.18); }
+        .button { background:#10b981; color:white; padding:9px 14px; border-radius:8px; text-decoration:none; display:inline-block; min-width:150px; text-align:center; border:none; outline:none; font-weight:600; cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,0.15); }
         .button:hover { background:#0ea56f; }
-        .actions-buttons { display:flex; flex-direction:column; align-items:flex-start; gap:10px; margin-top:8px; }
-        .actions-buttons .button { width:200px; }
+        .actions-buttons { display:flex; flex-direction:column; align-items:center; gap:12px; margin-top:8px; }
+        .actions-buttons .btn { width:240px; height:48px; }
         .inline-form { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
         .inline-form input { padding:10px; border-radius:8px; border:1px solid #d1d5db; min-width:180px; }
         .inline-form .button { min-width:160px; }
         table { width:100%; border-collapse: collapse; background: white; color: #1f2937; border-radius: 8px; overflow: hidden; }
-        th, td { padding: 10px 12px; border-bottom: 1px solid #e5e7eb; }
+        th, td { padding: 8px 10px; border-bottom: 1px solid #e5e7eb; }
         th { background:#10b981; color:white; text-align:left; }
         .complaints-table th, .complaints-table td { white-space: nowrap; }
         .filters { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px; align-items:flex-end; }
@@ -29,16 +32,19 @@
         .muted { color:#6b7280; font-size:13px; }
         .danger-btn { background:#dc2626; color:white; border:none; outline:none; padding:6px 10px; border-radius:6px; cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,0.15); }
         .small-select { padding:6px 8px; border-radius:6px; }
-        .status-badge { padding:6px 10px; border-radius:12px; font-size:12px; font-weight:bold; white-space: nowrap; }
+        .autocomplete-input { padding:6px 8px; border-radius:6px; border:1px solid #d1d5db; min-width:170px; }
+        .status-badge { padding:5px 9px; border-radius:12px; font-size:11px; font-weight:bold; white-space: nowrap; }
         .status-Ingediend { background:#fef08a; color:#854d0e; }
         .status-Inbehandeling { background:#dbeafe; color:#1d4ed8; }
         .status-Afgehandeld { background:#bbf7d0; color:#166534; }
         .status-Afgewezen { background:#fecdd3; color:#9f1239; }
-        .priority-high { color:#b91c1c; font-weight:bold; background:#fecaca; padding:6px 12px; border-radius:8px; border:1px solid #ef4444; display:inline-block; white-space: nowrap; }
-        .priority-normal { color:#6b7280; background:#f3f4f6; padding:6px 12px; border-radius:8px; display:inline-block; white-space: nowrap; }
+        .priority-high { color:#b91c1c; font-weight:bold; background:#fecaca; padding:5px 11px; border-radius:8px; border:1px solid #ef4444; display:inline-block; white-space: nowrap; font-size:11px; }
+        .priority-normal { color:#6b7280; background:#f3f4f6; padding:5px 11px; border-radius:8px; display:inline-block; white-space: nowrap; font-size:11px; }
         .actions-cell { display:flex; align-items:center; gap:10px; flex-wrap:nowrap; }
         .actions-cell form { display:flex; align-items:center; gap:6px; margin:0; }
         .actions-cell .button { padding:6px 10px; min-width:auto; }
+        .complaints-table .button { padding:6px 12px; min-width:110px; font-size:13px; }
+        .complaints-table .small-select { padding:6px 8px; font-size:13px; }
         .complaints-card h3 { margin:0 0 12px 0; }
         .complaints-table { margin-top:4px; }
         @media(max-width:768px){ .grid { grid-template-columns: 1fr; } th, td { font-size:14px; } }
@@ -48,7 +54,7 @@
     <div class="container">
         <div class="header">
             <h1>Admin Dashboard</h1>
-            <div><a href="{{ url_for('main.logout') }}" class="button">Uitloggen</a></div>
+            <div><a href="{{ url_for('main.logout') }}" class="btn">Uitloggen</a></div>
         </div>
 
         <div class="grid">
@@ -60,10 +66,11 @@
             <div class="card">
                 <h2>Acties</h2>
                 <div class="actions-buttons">
-                    <a href="{{ url_for('main.klacht_aanmaken') }}" class="button">Nieuwe Klacht</a>
-                    <a href="{{ url_for('main.user_klachten') }}" class="button">Bekijk Klachten</a>
-                    <a href="/user/klachten/export" class="button">Export (CSV)</a>
-                    <button id="bu_btn" type="button" class="button" onclick="toggleBUForm()">Voeg Businessunit toe</button>
+                    <a href="{{ url_for('main.klacht_aanmaken') }}" class="btn">Nieuwe Klacht</a>
+                    <a href="{{ url_for('main.user_klachten') }}" class="btn">Bekijk Klachten</a>
+                    <button id="bu_btn" type="button" class="btn" onclick="toggleBUForm()">Voeg Businessunit toe</button>
+                    <button type="button" class="btn" onclick="toggleUsers()">Gebruikersbeheer</button>
+                    <a href="/user/klachten/export" class="btn">Export (CSV)</a>
                     <form id="bu_form" action="{{ url_for('main.admin_create_productiebedrijf') }}" method="POST" class="inline-form" style="display:none;">
                         <input name="naam" placeholder="Nieuwe Businessunit" required>
                         <button type="submit" class="button">Opslaan</button>
@@ -72,7 +79,7 @@
             </div>
         </div>
 
-        <div style="margin-top:20px;">
+        <div id="users_card" style="margin-top:20px; display:none;">
             <div class="card">
                 <h3>Gebruikersbeheer</h3>
                 <table>
@@ -84,12 +91,7 @@
                             <td>{{ u.naam }}</td>
                             <td>{{ u.email }}</td>
                             <td>{{ u.rol }}</td>
-                            <td>
-                                {% if productiebedrijven %}
-                                    {% set bu = productiebedrijven|selectattr('productiebedrijf_id','equalto',u.productiebedrijf_id)|first %}
-                                    {{ bu.naam if bu else '' }}
-                                {% endif %}
-                            </td>
+                            <td>{{ u.productiebedrijf_naam or '' }}</td>
                             <td class="actions-cell">
                                 <form action="{{ url_for('main.admin_update_user', user_id=u.gebruiker_id) }}" method="POST">
                                     <select name="rol" class="small-select">
@@ -100,7 +102,7 @@
                                     <select name="productiebedrijf" class="small-select">
                                         <option value="">Zonder businessunit</option>
                                         {% for p in productiebedrijven %}
-                                            <option value="{{ p.productiebedrijf_id }}" {% if u.productiebedrijf_id == p.productiebedrijf_id %}selected{% endif %}>{{ p.naam }}</option>
+                                            <option value="{{ p.productiebedrijf_id }}" {% if (u.productiebedrijf_id|string) == (p.productiebedrijf_id|string) %}selected{% endif %}>{{ p.naam }}</option>
                                         {% endfor %}
                                         {% if not productiebedrijven %}
                                             {% for bu in businessunits %}
@@ -144,76 +146,6 @@
                 </div>
             </div>
         </div>
-
-        <!-- Klachten overzicht -->
-        <div style="margin-top:20px;">
-            <div class="card complaints-card">
-                <h3>Klachten overzicht</h3>
-                <form method="GET" class="filters">
-                    <div>
-                        <label for="bu_filter">Businessunit</label><br>
-                        <select id="bu_filter" name="productiebedrijf">
-                            <option value="">Alle</option>
-                            {% for bu in businessunits %}
-                                <option value="{{ bu }}" {% if bu_filter==bu %}selected{% endif %}>{{ bu }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div>
-                        <button type="submit" class="button">Filter</button>
-                    </div>
-                </form>
-                {% if klachten %}
-                <table class="complaints-table">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Datum</th>
-                            <th>Klant</th>
-                            <th>Status</th>
-                            <th>Prioriteit</th>
-                            <th>Businessunit</th>
-                            <th>Verantwoordelijke</th>
-                            <th>Acties</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for k in klachten %}
-                        <tr>
-                            <td>#{{ k.klacht_id }}</td>
-                            <td>{{ k.datum_melding.split('T')[0] if k.datum_melding }}</td>
-                            <td>{{ k.klant.klantnaam if k.klant }}</td>
-                            <td><span class="status-badge status-{{ k.status.replace(' ', '') }}">{{ k.status }}</span></td>
-                            <td>{% if k.prioriteit %}<span class="priority-high">Hoog</span>{% else %}<span class="priority-normal">Normaal</span>{% endif %}</td>
-                            <td>{{ k.productiebedrijf or '' }}</td>
-                            <td>
-                                {% if k.vertegenwoordiger and k.vertegenwoordiger.get('naam') %}
-                                    {{ k.vertegenwoordiger.get('naam') }}
-                                {% else %}
-                                    {{ k.vertegenwoordiger_id }}
-                                {% endif %}
-                            </td>
-                            <td>
-                                <a href="{{ url_for('main.klacht_details', klacht_id=k.klacht_id) }}" class="button" style="padding:6px 10px; display:inline-flex; align-items:center; justify-content:center; min-width:120px;">Details</a>
-                                <form action="{{ url_for('main.keyuser_assign_klacht', klacht_id=k.klacht_id) }}" method="POST" style="display:inline-flex; gap:6px; align-items:center; margin-top:6px; flex-wrap:nowrap;">
-                                    <select name="vertegenwoordiger_id" class="small-select" required>
-                                        <option value="">Kies verantwoordelijke</option>
-                                        {% for r in vertegenw %}
-                                            <option value="{{ r.gebruiker_id }}">{{ r.naam }}</option>
-                                        {% endfor %}
-                                    </select>
-                                    <button type="submit" class="button" style="padding:6px 10px; min-width:110px;">Toewijzen</button>
-                                </form>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-                {% else %}
-                <div class="muted">Geen openstaande klachten.</div>
-                {% endif %}
-            </div>
-        </div>
     </div>
     <script>
         function toggleBUForm() {
@@ -222,6 +154,15 @@
             if (btn && form) {
                 btn.style.display = 'none';
                 form.style.display = 'flex';
+            }
+        }
+        function toggleUsers() {
+            const card = document.getElementById('users_card');
+            if (card) {
+                const isHidden = card.style.display === 'none' || card.style.display === '';
+                card.style.display = isHidden ? 'block' : 'none';
+                if (!isHidden) return;
+                card.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
         }
     </script>
