@@ -110,8 +110,8 @@
                         </div>
 
                         <div class="form-group">
-                            <label for="btw_nummer">BTW-nummer klant</label>
-                            <input type="text" name="btw_nummer" id="btw_nummer" placeholder="BTW-nummer">
+                            <label for="ondernemingsnummer" class="required">Ondernemingsnummer klant</label>
+                            <input type="text" name="ondernemingsnummer" id="ondernemingsnummer" placeholder="Ondernemingsnummer" required>
                         </div>
 
                         <div class="form-group">
@@ -140,7 +140,7 @@
                         </div>
 
                         <div class="form-group full-width">
-                            <label for="mogelijke_oorzaak">Mogelijke Oorzaak</label>
+                            <label for="mogelijke_oorzaak">Mogelijke oorzaak</label>
                             <textarea name="mogelijke_oorzaak" id="mogelijke_oorzaak" placeholder="Beschrijf de mogelijke oorzaak van het probleem"></textarea>
                         </div>
 
@@ -154,7 +154,7 @@
                             <div class="file-upload" id="fileUploadArea">
                                 <input type="file" name="bijlage" id="bijlage" accept="image/*,application/pdf" multiple>
                                 <label for="bijlage" class="file-upload-label">
-                                    <div class="upload-icon">ÐY"ú</div>
+                                    <div class="upload-icon">&#128247;</div>
                                     <div id="fileUploadText">Klik om bestanden te uploaden</div>
                                     <div style="font-size: 0.9rem; color: #666;">(Optioneel - JPG, PNG, PDF, etc.)</div>
                                 </label>
@@ -165,9 +165,9 @@
                         </div>
 
                         <div class="form-group full-width">
-                            <label>
+                            <label style="display:inline-flex; align-items:center; gap:8px; white-space: nowrap;">
                                 <input type="checkbox" name="notify_customer">
-                                Klant notificeren via e-mail (indien beschikbaar)
+                                <span>Klant notificeren via e-mail (indien beschikbaar)</span>
                             </label>
                         </div>
 
@@ -185,7 +185,7 @@
                         <a href="{{ url_for('main.user_dashboard') }}">
                             <button type="button" class="btn btn-secondary">Annuleren</button>
                         </a>
-                        <button type="submit" class="btn btn-primary">ÐY"< Klacht Indienen</button>
+                        <button type="submit" class="btn btn-primary">Klacht Indienen</button>
                     </div>
                 </form>
             </div>

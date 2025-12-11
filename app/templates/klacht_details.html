@@ -13,6 +13,10 @@
         .detail-row { display: flex; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #e5e7eb; gap:12px; flex-wrap:wrap; }
         .detail-label { font-weight: bold; width: 200px; color: #374151; }
         .detail-value { flex: 1; color: #1f2937; min-width:200px; }
+        .details-card input,
+        .details-card select,
+        .details-card textarea,
+        .details-card .readonly-field { box-sizing: border-box; max-width: 100%; }
         .status-badge { padding: 6px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; }
         .status-Ingediend { background: #fff3cd; color: #856404; }
         .status-Goedgekeurd { background: #d1ecf1; color: #0c5460; }
@@ -219,7 +223,7 @@
                         <select name="productiebedrijf" class="edit-select" required>
                             <option value="">Kies businessunit</option>
                             {% for bu in businessunits %}
-                                <option value="{{ bu }}" {% if klacht.productiebedrijf == bu %}selected{% endif %}>{{ bu }}</option>
+                                <option value="{{ bu }}" {% if klacht.productiebedrijf == bu or klacht.businessunit == bu %}selected{% endif %}>{{ bu }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -239,7 +243,7 @@
                 </div>
 
                 <div class="detail-row">
-                    <div class="detail-label">Mogelijke Oorzaak:</div>
+                    <div class="detail-label">Mogelijke oorzaak:</div>
                     <div class="detail-value">
                         <textarea name="mogelijke_oorzaak" class="edit-textarea" placeholder="Beschrijf de mogelijke oorzaak">{{ klacht.mogelijke_oorzaak or '' }}</textarea>
                     </div>
@@ -253,9 +257,9 @@
                 </div>
 
                 <div class="detail-row">
-                    <div class="detail-label">BTW-nummer klant:</div>
+                    <div class="detail-label">Ondernemingsnummer klant:</div>
                     <div class="detail-value">
-                        <input type="text" name="btw_nummer" value="{{ klacht.btw_nummer or '' }}" class="edit-input" placeholder="BTW-nummer">
+                        <input type="text" name="ondernemingsnummer" value="{{ klacht.ondernemingsnummer or '' }}" class="edit-input" placeholder="Ondernemingsnummer">
                     </div>
                 </div>
 
@@ -274,7 +278,6 @@
                     <li style="padding:8px 0; border-bottom:1px solid #e5e7eb;">
                         <strong>{{ sh.datum_wijziging.split('T')[0] }} {{ sh.datum_wijziging.split('T')[1][:8] if sh.datum_wijziging and 'T' in sh.datum_wijziging else '' }}</strong>
                         – {{ sh.oude_status }} → {{ sh.nieuwe_status }}
-                        {% if sh.opmerking %}<div style="color:#6b7280; font-size:13px;">{{ sh.opmerking }}</div>{% endif %}
                     </li>
                 {% endfor %}
                 </ul>

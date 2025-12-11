@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gebruikersbeheer</title>
+    <style>
+        body { font-family: Arial, sans-serif; background:#23533e; color:white; margin:0; padding:20px; }
+        .container { max-width: 1100px; margin: 0 auto; }
+        .header { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+        .btn { background:#15803d; color:white; border:none; outline:none; border-radius:10px; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; font-weight:700; letter-spacing:0.1px; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,0.18); height:44px; padding:0 16px; transition: transform 120ms ease, box-shadow 120ms ease, background 160ms ease; }
+        .btn:hover { transform: translateY(-1px); box-shadow:0 4px 10px rgba(0,0,0,0.2); background:#0f6a34; }
+        .card { background:white; color:#1f2937; border-radius:12px; box-shadow:0 6px 16px rgba(0,0,0,0.14); padding:20px; margin-bottom:20px; }
+        .form-row { display:grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap:10px; }
+        @media(max-width:1100px){ .form-row { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); } }
+        .users-table { width:100%; border-collapse: collapse; margin-top:10px; background:white; color:#1f2937; border-radius:12px; overflow:hidden; box-shadow:0 4px 12px rgba(0,0,0,0.12); }
+        .users-table th, .users-table td { padding:12px 14px; border-bottom:1px solid #e5e7eb; text-align:left; }
+        .users-table th { background:#10b981; color:white; }
+        .small-btn { background:#15803d; color:white; border:none; border-radius:8px; padding:6px 10px; cursor:pointer; }
+        .small-btn:hover { background:#0f6a34; }
+        label { font-weight:600; font-size:13px; }
+        input, select { padding:10px; border:1px solid #d1d5db; border-radius:8px; width:100%; box-sizing:border-box; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Gebruikersbeheer</h1>
+            <a href="{{ url_for('main.admin_dashboard') }}" class="btn">Terug naar dashboard</a>
+        </div>
+
+        <div class="card">
+            <h3>Nieuwe gebruiker</h3>
+            <form action="{{ url_for('main.admin_create_user') }}" method="POST">
+                <div class="form-row">
+                    <div>
+                        <label>Naam</label>
+                        <input name="naam" required>
+                    </div>
+                    <div>
+                        <label>Email</label>
+                        <input name="email" type="email" required>
+                    </div>
+                    <div>
+                        <label>Wachtwoord</label>
+                        <input name="wachtwoord" type="text" placeholder="Wachtwoord">
+                    </div>
+                    <div>
+                        <label>Rol</label>
+                        <select name="rol">
+                            <option value="User">User</option>
+                            <option value="Key user">Key user</option>
+                            <option value="Admin">Admin</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Businessunit</label>
+                        <select name="productiebedrijf">
+                            <option value="">Kies businessunit</option>
+                            {% for bu in businessunits %}
+                            <option value="{{ bu }}">{{ bu }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div style="margin-top:12px;">
+                    <button type="submit" class="btn">Opslaan</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="card">
+            <h3>Bestaande gebruikers</h3>
+            <table class="users-table">
+                <thead>
+                    <tr>
+                        <th>Naam</th>
+                        <th>Email</th>
+                        <th>Rol</th>
+                        <th>Businessunit</th>
+                        <th>Acties</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for u in gebruikers %}
+                    <tr>
+                        <td>{{ u.naam }}</td>
+                        <td>{{ u.email }}</td>
+                        <td>{{ u.rol }}</td>
+                        <td>{{ u.productiebedrijf_naam or '' }}</td>
+                        <td>
+                            <form action="{{ url_for('main.admin_delete_user', user_id=u.gebruiker_id) }}" method="POST" style="display:inline;">
+                                <button type="submit" class="small-btn" onclick="return confirm('Gebruiker verwijderen?');">Verwijderen</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html>

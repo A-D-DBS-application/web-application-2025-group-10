@@ -8,46 +8,18 @@
         body { font-family: Arial, sans-serif; background: #23533e; color: white; padding: 20px; margin:0; }
         .container { max-width: 1200px; margin: 0 auto; }
         .header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:12px; }
-        .card { background: white; color: #1f2937; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
-        .grid { display:grid; grid-template-columns: 1fr 1fr; gap:20px; align-items:start; }
-        button { border:none; outline:none; }
-        .btn { background:linear-gradient(135deg,#12c68b,#0ea56f); color:white; border:none; outline:none; border-radius:10px; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; font-weight:700; letter-spacing:0.1px; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,0.18); width:240px; height:48px; padding:0 18px; transition: transform 120ms ease, box-shadow 120ms ease, background 160ms ease; }
-        .btn:hover { transform: translateY(-1px); box-shadow:0 4px 10px rgba(0,0,0,0.2); background:linear-gradient(135deg,#0fb57b,#0d9664); }
-        .btn:active { transform: translateY(0); box-shadow:0 2px 6px rgba(0,0,0,0.18); }
-        .button { background:#10b981; color:white; padding:9px 14px; border-radius:8px; text-decoration:none; display:inline-block; min-width:150px; text-align:center; border:none; outline:none; font-weight:600; cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,0.15); }
-        .button:hover { background:#0ea56f; }
-        .actions-buttons { display:flex; flex-direction:column; align-items:center; gap:12px; margin-top:8px; }
-        .actions-buttons .btn { width:240px; height:48px; }
-        .inline-form { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-        .inline-form input { padding:10px; border-radius:8px; border:1px solid #d1d5db; min-width:180px; }
-        .inline-form .button { min-width:160px; }
-        table { width:100%; border-collapse: collapse; background: white; color: #1f2937; border-radius: 8px; overflow: hidden; }
-        th, td { padding: 8px 10px; border-bottom: 1px solid #e5e7eb; }
-        th { background:#10b981; color:white; text-align:left; }
-        .complaints-table th, .complaints-table td { white-space: nowrap; }
-        .filters { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px; align-items:flex-end; }
-        .filters label { font-size:12px; color:#1f2937; }
-        .filters select { padding:8px 10px; border-radius:8px; border:1px solid #d1d5db; }
-        .filters .button { min-width:90px; padding:8px 14px; }
-        .muted { color:#6b7280; font-size:13px; }
-        .danger-btn { background:#dc2626; color:white; border:none; outline:none; padding:6px 10px; border-radius:6px; cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,0.15); }
-        .small-select { padding:6px 8px; border-radius:6px; }
-        .autocomplete-input { padding:6px 8px; border-radius:6px; border:1px solid #d1d5db; min-width:170px; }
-        .status-badge { padding:5px 9px; border-radius:12px; font-size:11px; font-weight:bold; white-space: nowrap; }
-        .status-Ingediend { background:#fef08a; color:#854d0e; }
-        .status-Inbehandeling { background:#dbeafe; color:#1d4ed8; }
-        .status-Afgehandeld { background:#bbf7d0; color:#166534; }
-        .status-Afgewezen { background:#fecdd3; color:#9f1239; }
-        .priority-high { color:#b91c1c; font-weight:bold; background:#fecaca; padding:5px 11px; border-radius:8px; border:1px solid #ef4444; display:inline-block; white-space: nowrap; font-size:11px; }
-        .priority-normal { color:#6b7280; background:#f3f4f6; padding:5px 11px; border-radius:8px; display:inline-block; white-space: nowrap; font-size:11px; }
-        .actions-cell { display:flex; align-items:center; gap:10px; flex-wrap:nowrap; }
-        .actions-cell form { display:flex; align-items:center; gap:6px; margin:0; }
-        .actions-cell .button { padding:6px 10px; min-width:auto; }
-        .complaints-table .button { padding:6px 12px; min-width:110px; font-size:13px; }
-        .complaints-table .small-select { padding:6px 8px; font-size:13px; }
-        .complaints-card h3 { margin:0 0 12px 0; }
-        .complaints-table { margin-top:4px; }
-        @media(max-width:768px){ .grid { grid-template-columns: 1fr; } th, td { font-size:14px; } }
+        .btn { background:#15803d; color:white; border:none; outline:none; border-radius:10px; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; font-weight:700; letter-spacing:0.1px; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,0.18); width:240px; height:48px; padding:0 18px; transition: transform 120ms ease, box-shadow 120ms ease, background 160ms ease; }
+        .btn:hover { transform: translateY(-1px); box-shadow:0 4px 10px rgba(0,0,0,0.2); background:#0f6a34; }
+        .grid { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:24px; }
+        .card { background: white; color: #1f2937; padding: 28px; border-radius: 12px; box-shadow: 0 6px 16px rgba(0,0,0,0.14); min-height: 190px; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; gap:10px; }
+        .action-card { background: white; color:#0f172a; padding: 26px; border-radius: 16px; box-shadow: 0 8px 18px rgba(0,0,0,0.16); display:flex; flex-direction:column; gap:10px; text-decoration:none; min-height: 190px; transition: transform 140ms ease, box-shadow 140ms ease, background 160ms ease, color 160ms ease; border: 1px solid #e5e7eb; align-items: center; justify-content: center; text-align: center; }
+        .action-card:hover { transform: translateY(-3px); box-shadow:0 12px 20px rgba(0,0,0,0.2); background: #15803d; color: #f8fafc; border-color: #15803d; }
+        .action-card:hover .action-icon { color: #f8fafc; }
+        .action-icon { font-size: 40px; line-height: 1; display:inline-flex; align-items:center; justify-content:center; width:auto; height:auto; border-radius:0; background: none; color: #0f172a; }
+        .action-title { font-size: 20px; font-weight: 700; }
+        .action-sub { font-size: 14px; opacity: 0.85; }
+        @media(max-width:900px){ .grid { grid-template-columns: 1fr; } }
+        @media(max-width:900px){ .grid { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
@@ -59,112 +31,42 @@
 
         <div class="grid">
             <div class="card">
-                <h2>Overzicht</h2>
+                <h2>Bedrijfs-klachten</h2>
+                <p>Aantal openstaande klachten: <strong>{{ total_klachten }}</strong></p>
+                {% if today_new and today_new > 0 %}
+                <p>Nieuwe klachten vandaag: <strong>{{ today_new }}</strong></p>
+                {% endif %}
                 <p>Totaal gebruikers: <strong>{{ total_gebruikers }}</strong></p>
-                <p>Totaal open klachten: <strong>{{ total_klachten }}</strong></p>
             </div>
-            <div class="card">
-                <h2>Acties</h2>
-                <div class="actions-buttons">
-                    <a href="{{ url_for('main.klacht_aanmaken') }}" class="btn">Nieuwe Klacht</a>
-                    <a href="{{ url_for('main.user_klachten') }}" class="btn">Bekijk Klachten</a>
-                    <button id="bu_btn" type="button" class="btn" onclick="toggleBUForm()">Voeg Businessunit toe</button>
-                    <button type="button" class="btn" onclick="toggleUsers()">Gebruikersbeheer</button>
-                    <a href="/user/klachten/export" class="btn">Export (CSV)</a>
-                    <form id="bu_form" action="{{ url_for('main.admin_create_productiebedrijf') }}" method="POST" class="inline-form" style="display:none;">
-                        <input name="naam" placeholder="Nieuwe Businessunit" required>
-                        <button type="submit" class="button">Opslaan</button>
-                    </form>
-                </div>
-            </div>
-        </div>
-
-        <div id="users_card" style="margin-top:20px; display:none;">
-            <div class="card">
-                <h3>Gebruikersbeheer</h3>
-                <table>
-                    <thead><tr><th>ID</th><th>Naam</th><th>Email</th><th>Rol</th><th>Businessunit</th><th>Acties</th></tr></thead>
-                    <tbody>
-                        {% for u in gebruikers %}
-                        <tr>
-                            <td>{{ u.gebruiker_id }}</td>
-                            <td>{{ u.naam }}</td>
-                            <td>{{ u.email }}</td>
-                            <td>{{ u.rol }}</td>
-                            <td>{{ u.productiebedrijf_naam or '' }}</td>
-                            <td class="actions-cell">
-                                <form action="{{ url_for('main.admin_update_user', user_id=u.gebruiker_id) }}" method="POST">
-                                    <select name="rol" class="small-select">
-                                        <option value="User" {% if u.rol=='User' %}selected{% endif %}>User</option>
-                                        <option value="Key user" {% if u.rol=='Key user' %}selected{% endif %}>Key user</option>
-                                        <option value="Admin" {% if u.rol=='Admin' %}selected{% endif %}>Admin</option>
-                                    </select>
-                                    <select name="productiebedrijf" class="small-select">
-                                        <option value="">Zonder businessunit</option>
-                                        {% for p in productiebedrijven %}
-                                            <option value="{{ p.productiebedrijf_id }}" {% if (u.productiebedrijf_id|string) == (p.productiebedrijf_id|string) %}selected{% endif %}>{{ p.naam }}</option>
-                                        {% endfor %}
-                                        {% if not productiebedrijven %}
-                                            {% for bu in businessunits %}
-                                                <option value="{{ bu }}">{{ bu }}</option>
-                                            {% endfor %}
-                                        {% endif %}
-                                    </select>
-                                    <button type="submit" class="button" style="padding:6px 10px;">Opslaan</button>
-                                </form>
-                                <form action="{{ url_for('main.admin_delete_user', user_id=u.gebruiker_id) }}" method="POST" onsubmit="return confirm('Gebruiker verwijderen?');">
-                                    <button type="submit" class="danger-btn">Verwijderen</button>
-                                </form>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-                <div style="margin-top:12px;">
-                    <form action="{{ url_for('main.admin_create_user') }}" method="POST" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                        <input name="naam" placeholder="Naam" required>
-                        <input name="email" placeholder="Email" required>
-                        <select name="rol">
-                            <option value="User">User</option>
-                            <option value="Key user">Key user</option>
-                            <option value="Admin">Admin</option>
-                        </select>
-                        <select name="productiebedrijf" aria-label="Businessunit">
-                            <option value="">Zonder businessunit</option>
-                            {% for p in productiebedrijven %}
-                                <option value="{{ p.productiebedrijf_id }}">{{ p.naam }}</option>
-                            {% endfor %}
-                            {% if not productiebedrijven %}
-                                {% for bu in businessunits %}
-                                    <option value="{{ bu }}">{{ bu }}</option>
-                                {% endfor %}
-                            {% endif %}
-                        </select>
-                        <input name="wachtwoord" placeholder="Wachtwoord">
-                        <button type="submit" class="button">Creer gebruiker</button>
-                    </form>
-                </div>
+            <a class="action-card" href="{{ url_for('main.klacht_aanmaken') }}">
+                <div class="action-icon">&#128221;</div>
+                <div class="action-title">Nieuwe klacht</div>
+                <div class="action-sub">Maak een nieuwe klacht aan</div>
+            </a>
+            <a class="action-card" href="{{ url_for('main.user_klachten') }}">
+                <div class="action-icon">&#128194;</div>
+                <div class="action-title">Bekijk klachten</div>
+                <div class="action-sub">Bekijk alle klachten</div>
+            </a>
+            <a class="action-card" href="/user/klachten/export">
+                <div class="action-icon">&#128190;</div>
+                <div class="action-title">Export (CSV)</div>
+                <div class="action-sub">Download een CSV-export</div>
+            </a>
+            <a class="action-card" href="{{ url_for('main.admin_users_page') }}">
+                <div class="action-icon">&#128100;</div>
+                <div class="action-title">Gebruikersbeheer</div>
+                <div class="action-sub">Bekijk en beheer gebruikers</div>
+            </a>
+            <div class="action-card">
+                <div class="action-icon">&#128203;</div>
+                <div class="action-title">Voeg businessunit toe</div>
+                <form action="{{ url_for('main.admin_create_productiebedrijf') }}" method="POST" style="width:100%; display:flex; flex-direction:column; gap:8px; margin-top:6px;">
+                    <input name="naam" placeholder="Nieuwe businessunit" required style="padding:10px; border:1px solid #d1d5db; border-radius:8px;">
+                    <button type="submit" class="btn" style="width:100%;">Opslaan</button>
+                </form>
             </div>
         </div>
     </div>
-    <script>
-        function toggleBUForm() {
-            const btn = document.getElementById('bu_btn');
-            const form = document.getElementById('bu_form');
-            if (btn && form) {
-                btn.style.display = 'none';
-                form.style.display = 'flex';
-            }
-        }
-        function toggleUsers() {
-            const card = document.getElementById('users_card');
-            if (card) {
-                const isHidden = card.style.display === 'none' || card.style.display === '';
-                card.style.display = isHidden ? 'block' : 'none';
-                if (!isHidden) return;
-                card.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-        }
-    </script>
 </body>
 </html>
