@@ -1,20 +1,20 @@
-<!DOCTYPE html>
-<html lang="nl">
-<head>
+<!DOCTYPE html>
+<html lang="nl">
+<head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Key user Dashboard</title>
-    <style>
-        body { font-family: Arial, sans-serif; background: #23533e; color: white; padding: 20px; margin:0; }
-        .container { max-width: 1200px; margin: 0 auto; }
-        .header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:12px; }
+    <style>
+        body { font-family: Arial, sans-serif; background: #23533e; color: white; padding: 20px; margin:0; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:12px; }
         .card { background: white; color: #1f2937; padding: 28px; border-radius: 12px; box-shadow: 0 6px 16px rgba(0,0,0,0.14); min-height: 170px; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; gap:8px; }
         .grid { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:24px; }
         .btn { background:#15803d; color:white; border:none; outline:none; border-radius:10px; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; font-weight:700; letter-spacing:0.1px; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,0.18); width:240px; height:48px; padding:0 18px; transition: transform 120ms ease, box-shadow 120ms ease, background 160ms ease; }
         .btn:hover { transform: translateY(-1px); box-shadow:0 4px 10px rgba(0,0,0,0.22); background:#0f6a34; }
-        .btn:active { transform: translateY(0); box-shadow:0 2px 6px rgba(0,0,0,0.18); }
-        .button { background:#10b981; color:white; padding:9px 14px; border-radius:8px; text-decoration:none; display:inline-block; min-width:150px; text-align:center; border:none; outline:none; font-weight:600; cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,0.15); }
-        .meta { color:#d1fae5; font-size:15px; margin:0; }
+        .btn:active { transform: translateY(0); box-shadow:0 2px 6px rgba(0,0,0,0.18); }
+        .button { background:#10b981; color:white; padding:9px 14px; border-radius:8px; text-decoration:none; display:inline-block; min-width:150px; text-align:center; border:none; outline:none; font-weight:600; cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,0.15); }
+        .meta { color:#d1fae5; font-size:15px; margin:0; }
         .action-card { background: white; color:#0f172a; padding: 26px; border-radius: 16px; box-shadow: 0 8px 18px rgba(0,0,0,0.16); display:flex; flex-direction:column; gap:10px; text-decoration:none; min-height: 190px; transition: transform 140ms ease, box-shadow 140ms ease, background 160ms ease, color 160ms ease; border: 1px solid #e5e7eb; align-items: center; justify-content: center; text-align: center; }
         .action-card:hover { transform: translateY(-3px); box-shadow:0 12px 20px rgba(0,0,0,0.2); background: #15803d; color: #f8fafc; border-color: #15803d; }
         .action-card:hover .action-icon { color: #f8fafc; }
@@ -23,17 +23,33 @@
         .action-title { font-size: 20px; font-weight: 700; }
         .action-sub { font-size: 14px; opacity: 0.85; }
         @media(max-width:900px){ .grid { grid-template-columns: 1fr; } }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>Key user Dashboard</h1>
-            <p class="meta">Businessunit: <strong>{{ businessunit or 'Onbekend' }}</strong></p>
-            <div><a href="{{ url_for('main.logout') }}" class="btn">Uitloggen</a></div>
-        </div>
-
-        <div class="grid">
+        .flash-messages { margin: 0 0 20px 0; }
+        .alert { padding: 14px; border-radius: 10px; margin-bottom: 12px; text-align: center; font-weight: 600; }
+        .alert-success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+        .alert-error { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+        .alert-info { background: #e0f2fe; color: #075985; border: 1px solid #bae6fd; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Key user Dashboard</h1>
+            <p class="meta">Businessunit: <strong>{{ businessunit or 'Onbekend' }}</strong></p>
+            <div><a href="{{ url_for('main.logout') }}" class="btn">Uitloggen</a></div>
+        </div>
+
+        <div class="flash-messages">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        {% set css = 'alert-success' if category == 'success' else 'alert-error' if category == 'error' else 'alert-info' %}
+                        <div class="alert {{ css }}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+        </div>
+
+        <div class="grid">
             <div class="card">
                 <h2>Bedrijfs-klachten</h2>
                 <p>Aantal openstaande klachten: <strong>{{ total_klachten }}</strong></p>
@@ -41,22 +57,22 @@
                 <p>Nieuwe klachten vandaag: <strong>{{ today_new }}</strong></p>
                 {% endif %}
             </div>
-            <a class="action-card" href="{{ url_for('main.klacht_aanmaken') }}">
-                <div class="action-icon">&#128221;</div>
-                <div class="action-title">Nieuwe klacht</div>
-                <div class="action-sub">Maak een nieuwe klacht aan</div>
-            </a>
+            <a class="action-card" href="{{ url_for('main.klacht_aanmaken') }}">
+                <div class="action-icon">&#128221;</div>
+                <div class="action-title">Nieuwe klacht</div>
+                <div class="action-sub">Maak een nieuwe klacht aan</div>
+            </a>
             <a class="action-card" href="{{ url_for('main.user_klachten') }}">
                 <div class="action-icon">&#128194;</div>
                 <div class="action-title">Bekijk klachten</div>
                 <div class="action-sub">Bekijk de klachten van {{ businessunit or 'jouw businessunit' }}</div>
             </a>
-            <a class="action-card" href="/user/klachten/export">
-                <div class="action-icon">&#128190;</div>
-                <div class="action-title">Export (CSV)</div>
-                <div class="action-sub">Download een CSV-export</div>
-            </a>
-        </div>
-    </div>
-</body>
-</html>
+            <a class="action-card" href="/user/klachten/export">
+                <div class="action-icon">&#128190;</div>
+                <div class="action-title">Export (CSV)</div>
+                <div class="action-sub">Download een CSV-export</div>
+            </a>
+        </div>
+    </div>
+</body>
+</html>

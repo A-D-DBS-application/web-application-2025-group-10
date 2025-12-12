@@ -36,8 +36,10 @@
         .back-button:hover { background: #059669; transform: translateY(-2px); }
         .header h1 { color: white; margin: 0; }
         .filters { display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; margin-bottom:12px; }
-        .filter-field { display:flex; flex-direction:column; gap:4px; color:#fff; font-size:12px; min-width:180px; }
-        .filter-field input, .filter-field select { padding:8px 10px; border-radius:8px; border:1px solid #d1d5db; }
+        .filter-field { display:flex; flex-direction:column; gap:4px; color:#fff; font-size:12px; min-width:130px; }
+        .filter-field input, .filter-field select { padding:6px 8px; border-radius:8px; border:1px solid #d1d5db; font-size:13px; }
+        .filter-field select { min-width: 150px; }
+        .filters .compact-btn { margin-top: 18px; }
         .klachten-table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); }
         .klachten-table th, .klachten-table td { padding: 16px; text-align: left; border-bottom: 1px solid #e5e7eb; color: #1f2937; }
         .klachten-table th { background: #10b981; color: white; font-weight: bold; }
@@ -71,7 +73,7 @@
         </div>
 
         <form method="GET" class="filters">
-            <div class="filter-field">
+            <div class="filter-field" style="flex:1; min-width:140px;">
                 <label for="klant_filter">Klant</label>
                 <input type="text" id="klant_filter" name="klant_naam" list="klanten_filter" value="{{ request.args.get('klant_naam') or '' }}" placeholder="Begin te typen...">
                 <input type="hidden" name="klant_id" id="klant_id_filter" value="{{ request.args.get('klant_id') or '' }}">
@@ -90,6 +92,17 @@
                     {% endfor %}
                 </select>
             </div>
+            {% if session.get('user_rol') in ['Admin', 'Key user'] %}
+            <div class="filter-field" style="min-width:150px;">
+                <label for="vertegenwoordiger_naam">Verantwoordelijke</label>
+                <input type="text" id="vertegenwoordiger_naam" name="vertegenwoordiger_naam" list="vertegenwoordigers_filter" value="{{ request.args.get('vertegenwoordiger_naam') or '' }}" placeholder="Naam verantwoordelijke">
+                <datalist id="vertegenwoordigers_filter">
+                    {% for rep in vertegenwoordigers or [] %}
+                        <option value="{{ rep.naam }}"></option>
+                    {% endfor %}
+                </datalist>
+            </div>
+            {% endif %}
             {% if session.get('user_rol') != 'Key user' %}
             <div class="filter-field">
                 <label for="productiebedrijf">Businessunit</label>
@@ -101,7 +114,7 @@
                 </select>
             </div>
             {% endif %}
-            <div class="filter-field">
+            <div class="filter-field" style="min-width:140px;">
                 <label for="status">Status</label>
                 <select name="status" id="status">
                     <option value="">Alle statussen</option>
@@ -112,20 +125,20 @@
                     <option value="Afgehandeld" {% if request.args.get('status') == 'Afgehandeld' %}selected{% endif %}>Afgehandeld</option>
                 </select>
             </div>
-            <div class="filter-field">
+            <div class="filter-field" style="min-width:140px;">
                 <label for="date_from">Begindatum</label>
                 <input type="date" id="date_from" name="date_from" value="{{ request.args.get('date_from') or '' }}">
             </div>
-            <div class="filter-field">
+            <div class="filter-field" style="min-width:140px;">
                 <label for="date_to">Einddatum</label>
                 <input type="date" id="date_to" name="date_to" value="{{ request.args.get('date_to') or '' }}">
             </div>
-            <div class="filter-field" style="min-width:auto;">
-                <button type="submit" class="action-link" style="padding:10px 16px;">Filter</button>
+            <div class="filter-field compact-btn" style="min-width:auto; margin-left:auto;">
+                <button type="submit" class="action-link" style="padding:10px 16px; white-space:nowrap;">Filter</button>
             </div>
             {% if session.get('user_rol') in ['Admin', 'Key user'] %}
-            <div class="filter-field" style="min-width:auto;">
-                <a href="/user/klachten/export{% if request.query_string %}?{{ request.query_string.decode('utf-8') }}{% endif %}" class="action-link" style="padding:10px 16px;">Export CSV</a>
+            <div class="filter-field compact-btn" style="min-width:auto;">
+                <a href="/user/klachten/export{% if request.query_string %}?{{ request.query_string.decode('utf-8') }}{% endif %}" class="action-link" style="padding:10px 16px; white-space:nowrap;">Export CSV</a>
             </div>
             {% endif %}
         </form>
@@ -147,6 +160,7 @@
                         <th>Klacht ID</th>
                         <th>Datum</th>
                         <th>Klant</th>
+                        <th>Verantwoordelijke</th>
                         <th>Businessunit</th>
                         <th>Status</th>
                         <th>Prioriteit</th>
@@ -169,7 +183,10 @@
                             {% endif %}
                         </td>
                         <td>{{ klacht.klant.klantnaam if klacht.klant else '' }}</td>
-                        <td>{{ klacht.productiebedrijf or 'Onbekend' }}</td>
+                        <td>
+                            {{ (klacht.vertegenwoordiger.naam if klacht.vertegenwoordiger and klacht.vertegenwoordiger.naam else klacht.vertegenwoordiger_naam) or '-' }}
+                        </td>
+                        <td>{{ klacht.businessunit or klacht.productiebedrijf or 'Onbekend' }}</td>
                         <td>
                             <span class="status-badge status-{{ klacht.status.replace(' ', '') }}">
                                 {{ klacht.status }}
