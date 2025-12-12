@@ -1,5 +1,5 @@
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy.dialects.postgresql import ENUM, JSONB
+from sqlalchemy.dialects.postgresql import ENUM
 from datetime import datetime
 
 db = SQLAlchemy()
@@ -17,12 +17,12 @@ gebruikersrol_enum = ENUM('Admin', 'Key user', 'User', name='gebruikersrol', cre
 
 class Businessunit(db.Model):
     __tablename__ = 'businessunit'
-    businessunit_id = db.Column(db.Integer, primary_key=True)
+    businessunit_id = db.Column(db.BigInteger, primary_key=True)
     naam = db.Column(db.String(255), nullable=False)
     adres = db.Column(db.String(255))
     contactpersoon = db.Column(db.String(255))
 
-    # Relatie naar vertegenwoordigers die bij dit productiebedrijf horen
+    # Relatie naar vertegenwoordigers die bij deze businessunit horen
     vertegenwoordigers = db.relationship('Gebruiker', backref='businessunit', lazy=True)
 
 class Gebruiker(db.Model):
@@ -33,14 +33,14 @@ class Gebruiker(db.Model):
     rol = db.Column(gebruikersrol_enum, nullable=False)
     wachtwoord = db.Column(db.Text, nullable=False)
     telefoon = telefoon = db.Column(db.Text)
-    businessunit_id = db.Column(db.Integer, db.ForeignKey('businessunit.businessunit_id', onupdate='CASCADE'))
+    businessunit_id = db.Column(db.BigInteger, db.ForeignKey('businessunit.businessunit_id', onupdate='CASCADE'))
 
 
     # Relatie naar statushistoriek die door deze gebruiker is gewijzigd
     statushistoriek = db.relationship('StatusHistoriek', backref='gewijzigd_door_gebruiker', lazy=True)
 
-    # Relatie naar klachten waarvoor deze gebruiker de vertegenwoordiger is
-    klachten = db.relationship('Klacht', backref='vertegenwoordiger', lazy=True, foreign_keys='Klacht.vertegenwoordiger_id')
+    # Relatie naar klachten waarvoor deze gebruiker de verantwoordelijke is
+    klachten = db.relationship('Klacht', backref='verantwoordelijke', lazy=True, foreign_keys='Klacht.verantwoordelijke_id')
 
 class Klant(db.Model):
     __tablename__ = 'klant'
@@ -50,7 +50,7 @@ class Klant(db.Model):
     email = db.Column(db.Text)
     telefoon =  db.Column(db.Text)
     adres = db.Column(db.Text)
-    ondernemingsnummer = db.Column(db.Integer)
+    ondernemingsnummer = db.Column(db.BigInteger)
 
     # Relaties naar orders en klachten
     orders = db.relationship('Order', backref='klant', lazy=True)
@@ -87,9 +87,9 @@ class Klacht(db.Model):
     klacht_omschrijving = db.Column(db.Text)
     opmerking_status_wijziging = db.Column(db.Text)
     datum_laatst_bewerkt = db.Column(db.DateTime(timezone=True), default=datetime.utcnow)
-    businessunit_id = db.Column(db.Integer, db.ForeignKey('businessunit.businessunit_id', onupdate='CASCADE'))
-    aantal_eenheden = db.Column(db.Integer)
-    artikelnummer = db.Column(db.Integer, db.ForeignKey('product.artikel_nr', ondelete='SET NULL'))
+    businessunit_id = db.Column(db.BigInteger, db.ForeignKey('businessunit.businessunit_id', onupdate='CASCADE'))
+    aantal_eenheden = db.Column(db.SmallInteger)
+    artikelnummer = db.Column(db.BigInteger, db.ForeignKey('product.artikel_nr', ondelete='SET NULL'))
 
     # Relatie naar statushistoriek
     statushistoriek = db.relationship('StatusHistoriek', backref='klacht', lazy=True, cascade='all, delete')
@@ -106,15 +106,15 @@ class StatusHistoriek(db.Model):
 
 class Product(db.Model):
     __tablename__ = 'product'
-    artikel_nr = db.Column(db.Integer, primary_key=True)
+    artikel_nr = db.Column(db.BigInteger, primary_key=True)
     naam = db.Column(db.String(255), nullable=False)
 
     orders = db.relationship('Order', secondary='producten_order', backref=db.backref('producten_via_m2m', lazy='dynamic'),lazy='dynamic')
 
 class Producten_Order(db.Model):
     __tablename__ = 'producten_order'
-    order_nummer = db.Column(db.String(255), db.ForeignKey('order.order_nummer'), primary_key=True,nullable=False)
-    artikel_nr = db.Column(db.Integer, db.ForeignKey('product.artikel_nr'),primary_key=True,nullable=False)
+    order_nummer = db.Column(db.String(255), db.ForeignKey('order.order_nummer'), primary_key=True, nullable=False)
+    artikel_nr = db.Column(db.BigInteger, db.ForeignKey('product.artikel_nr'), primary_key=True, nullable=False)
     aantal = db.Column(db.Integer, nullable=False)
 
     order = db.relationship('Order', backref='product_orders', lazy=True)

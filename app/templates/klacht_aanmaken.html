@@ -1,300 +1,245 @@
-<!DOCTYPE html>
-<html lang="nl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nieuwe Klacht Aanmaken</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --primary: #072619;
-            --primary-dark: #0b7149;
-            --secondary: #072619;
-            --success: #1d6b44;
-            --light: #f8f9fa;
-            --dark: #212529;
-            --border: #d1d5db;
-            --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            --radius: 12px;
-        }
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        body { font-family: 'Inter', sans-serif; background: linear-gradient(135deg, #3a7854 0%, #3a7854 100%); min-height: 100vh; padding: 20px; }
-        .container { max-width: 800px; margin: 0 auto; }
-        .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 30px; background: white; padding: 20px; border-radius: var(--radius); box-shadow: var(--shadow); }
-        .back-button { background: var(--light); color: var(--dark); padding: 10px 20px; text-decoration: none; border-radius: 8px; border: 1px solid var(--border); transition: all 0.3s ease; display: flex; align-items: center; gap: 8px; font-family: 'Inter', sans-serif; font-weight: 500; }
-        .back-button:hover { background: var(--border); transform: translateX(-2px); }
-        .card { background: white; border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
-        .card-header { background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; padding: 25px; text-align: center; }
-        .card-header h1 { font-size: 1.8rem; margin-bottom: 8px; font-family: 'Inter', sans-serif; font-weight: 600; }
-        .card-header p { opacity: 0.9; font-size: 1rem; font-family: 'Inter', sans-serif; font-weight: 400; }
-        .card-body { padding: 30px; }
-        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 25px; }
-        .form-group { margin-bottom: 20px; }
-        .form-group.full-width { grid-column: 1 / -1; }
-        label { display: block; margin-bottom: 8px; font-weight: 600; color: var(--dark); font-family: 'Inter', sans-serif; }
-        .required::after { content: " *"; color: #e63946; }
-        input, select, textarea { width: 100%; padding: 12px 16px; border: 2px solid var(--border); border-radius: 8px; font-size: 1rem; transition: all 0.3s ease; background: var(--light); font-family: 'Inter', sans-serif; font-weight: 400; }
-        input:focus, select:focus, textarea:focus { outline: none; border-color: var(--primary); background: white; box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1); }
-        textarea { resize: vertical; min-height: 100px; font-family: 'Inter', sans-serif; }
-        .file-upload { border: 2px dashed var(--border); padding: 30px; text-align: center; border-radius: 8px; background: var(--light); transition: all 0.3s ease; cursor: pointer; position: relative; }
-        .file-upload:hover { border-color: var(--primary); background: #f0fdf4; }
-        .file-upload input { display: none; }
-        .file-upload-label { display: flex; flex-direction: column; align-items: center; gap: 10px; cursor: pointer; }
-        .upload-icon { font-size: 2rem; color: var(--primary); }
-        .button-group { display: flex; gap: 15px; justify-content: flex-end; margin-top: 30px; padding-top: 20px; border-top: 1px solid var(--border); }
-        .btn { padding: 12px 30px; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: all 0.3s ease; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; font-family: 'Inter', sans-serif; }
-        .btn-primary { background: var(--primary); color: white; }
-        .btn-primary:hover { background: var(--primary-dark); transform: translateY(-2px); box-shadow: 0 6px 12px rgba(16, 185, 129, 0.3); }
-        .btn-secondary { background: var(--light); color: var(--dark); border: 1px solid var(--border); }
-        .btn-secondary:hover { background: var(--border); transform: translateY(-2px); }
-        .user-info { background: linear-gradient(135deg, #3a7854, #3a7854); color: white; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; text-align: center; font-family: 'Inter', sans-serif; }
-        .auto-info { background: #dbeafe; color: #0e6634; padding: 12px 16px; border-radius: 6px; margin: 10px 0; font-family: 'Inter', sans-serif; border: 1px solid #074931; font-size: 0.9rem; }
-        .flash-messages { margin-bottom: 20px; }
-        .alert { padding: 15px 20px; border-radius: 8px; margin-bottom: 15px; font-weight: 500; font-family: 'Inter', sans-serif; }
-        .alert-error { background: #ffe6e6; color: #d00000; border: 1px solid #ffcccc; }
-        .alert-success { background: #e6ffe6; color: #3a7854; border: 1px solid #ccffcc; }
-        .file-preview { margin-top: 10px; padding: 10px; background: #f0fdf4; border-radius: 6px; border: 1px solid #3a7854; }
-        .file-preview img { max-width: 200px; max-height: 200px; border-radius: 4px; }
-        @media (max-width: 768px) { .form-grid { grid-template-columns: 1fr; } .header { flex-direction: column; gap: 15px; text-align: center; } .button-group { flex-direction: column; } }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <a href="{{ url_for('main.user_dashboard') }}" class="back-button">Terug naar Dashboard</a>
-            <h1 style="font-family: 'Inter', sans-serif;">Nieuwe Klacht</h1>
-        </div>
-
-        <div class="flash-messages">
-            {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                    {% for category, message in messages %}
-                        <div class="alert alert-{{ category }}">{{ message }}</div>
-                    {% endfor %}
-                {% endif %}
-            {% endwith %}
-        </div>
-
-        <div class="card">
-            <div class="card-header">
-                <h1>Klacht Registreren</h1>
-                <p>Vul het formulier in om een nieuwe klacht aan te maken</p>
-            </div>
-
-            <div class="card-body">
-                <div class="user-info">
-                    <strong>Ingelogd als:</strong> {{ user_naam }} ({{ session.get('user_rol') }})
-                </div>
-
-                <form method="POST" enctype="multipart/form-data">
-                    <div class="form-grid">
-                        <div class="form-group">
-                            <label for="productiebedrijf" class="required">Businessunit</label>
-                            <select name="productiebedrijf" id="productiebedrijf" required>
-                                <option value="">Kies businessunit</option>
-                                {% for bu in businessunits %}
-                                    <option value="{{ bu }}">{{ bu }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="klant_naam" class="required">Klant</label>
-                            <input type="text" name="klant_naam" id="klant_naam" list="klanten_datalist" placeholder="Begin met typen..." required>
-                            <input type="hidden" name="klant_id" id="klant_id">
-                            <datalist id="klanten_datalist">
-                                {% for klant in klanten %}
-                                    <option value="{{ klant.klantnaam }}" data-id="{{ klant.klant_id }}"></option>
-                                {% endfor %}
-                            </datalist>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="ondernemingsnummer" class="required">Ondernemingsnummer klant</label>
-                            <input type="text" name="ondernemingsnummer" id="ondernemingsnummer" placeholder="Ondernemingsnummer" required>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="categorie_id" class="required">Probleemcategorie</label>
-                            <select name="categorie_id" id="categorie_id" required>
-                                <option value="">Selecteer een categorie</option>
-                                {% for categorie in categorieen %}
-                                    <option value="{{ categorie.categorie_id }}">{{ categorie.type }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-
-                        <div class="form-group full-width">
-                            <label for="order_nummer" class="required">Ordernummer</label>
-                            <input type="text" name="order_nummer" id="order_nummer" required placeholder="Voer ordernummer in">
-                        </div>
-
-                        <div class="form-group">
-                            <label for="artikelnummer" class="required">Artikelnummer</label>
-                            <input type="text" name="artikelnummer" id="artikelnummer" required placeholder="Voer artikelnummer in">
-                        </div>
-
-                        <div class="form-group">
-                            <label for="aantal_eenheden" class="required">Aantal eenheden</label>
-                            <input type="number" min="1" step="1" name="aantal_eenheden" id="aantal_eenheden" required placeholder="Aantal">
-                        </div>
-
-                        <div class="form-group full-width">
-                            <label for="mogelijke_oorzaak">Mogelijke oorzaak</label>
-                            <textarea name="mogelijke_oorzaak" id="mogelijke_oorzaak" placeholder="Beschrijf de mogelijke oorzaak van het probleem"></textarea>
-                        </div>
-
-                        <div class="form-group full-width">
-                            <label for="reden_afwijzing" class="required">Klacht omschrijving</label>
-                            <textarea name="reden_afwijzing" id="reden_afwijzing" required placeholder="Omschrijf de klacht"></textarea>
-                        </div>
-
-                        <div class="form-group full-width">
-                            <label for="bijlage">Bijlage (Foto)</label>
-                            <div class="file-upload" id="fileUploadArea">
-                                <input type="file" name="bijlage" id="bijlage" accept="image/*,application/pdf" multiple>
-                                <label for="bijlage" class="file-upload-label">
-                                    <div class="upload-icon">&#128247;</div>
-                                    <div id="fileUploadText">Klik om bestanden te uploaden</div>
-                                    <div style="font-size: 0.9rem; color: #666;">(Optioneel - JPG, PNG, PDF, etc.)</div>
-                                </label>
-                            </div>
-                            <div id="filePreview" class="file-preview" style="display: none;">
-                                <ul id="filesList" style="list-style: none; padding-left: 0; margin: 0;"></ul>
-                            </div>
-                        </div>
-
-                        <div class="form-group full-width">
-                            <div class="auto-info">
-                                <strong>Automatisch ingevuld:</strong>
-                                Status: <strong>Ingediend</strong> |
-                                Datum: <strong>Vandaag</strong> |
-                                Vertegenwoordiger: <strong>{{ user_naam }}</strong>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="button-group">
-                        <a href="{{ url_for('main.user_dashboard') }}">
-                            <button type="button" class="btn btn-secondary">Annuleren</button>
-                        </a>
-                        <button type="submit" class="btn btn-primary">Klacht Indienen</button>
-                    </div>
-                </form>
-            </div>
-        </div>
+{% extends "base.html" %}
+{% block title %}Nieuwe Klacht{% endblock %}
+{% block body_class %}page-klacht-aanmaken{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/klacht_aanmaken.css') }}">
+{% endblock %}
+{% block content %}
+<div class="container">
+    <div class="header">
+        <a href="{{ url_for('main.user_dashboard') }}" class="back-button">Terug naar Dashboard</a>
+        <h1 style="font-weight: 600;">Nieuwe Klacht</h1>
     </div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const form = document.querySelector('form');
-            const requiredFields = form.querySelectorAll('[required]');
-            const fileInput = document.getElementById('bijlage');
-            const filePreview = document.getElementById('filePreview');
-            const fileUploadText = document.getElementById('fileUploadText');
-            const filesList = document.getElementById('filesList');
-            const klantNaamInput = document.getElementById('klant_naam');
-            const klantIdHidden = document.getElementById('klant_id');
-            const klantDatalist = document.getElementById('klanten_datalist');
+    <div class="flash-messages">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+    </div>
 
-            function renderFileList() {
-                filesList.innerHTML = '';
-                if (fileInput.files.length === 0) {
-                    filePreview.style.display = 'none';
-                    fileUploadText.textContent = 'Klik om bestanden te uploaden';
-                    return;
-                }
-                filePreview.style.display = 'block';
-                Array.from(fileInput.files).forEach((file, index) => {
-                    const li = document.createElement('li');
-                    li.style.display = 'flex';
-                    li.style.alignItems = 'center';
-                    li.style.justifyContent = 'space-between';
-                    li.style.padding = '6px 8px';
-                    li.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
-                    li.style.fontSize = '14px';
-                    const name = document.createElement('span');
-                    name.textContent = file.name;
-                    const actions = document.createElement('div');
-                    actions.style.display = 'flex';
-                    actions.style.gap = '8px';
-                    if (file.type && file.type.startsWith('image/')) {
-                        const img = document.createElement('img');
-                        img.src = URL.createObjectURL(file);
-                        img.style.maxWidth = '60px';
-                        img.style.maxHeight = '60px';
-                        img.style.borderRadius = '6px';
-                        img.style.marginRight = '8px';
-                        name.prepend(img);
-                    }
-                    const removeBtn = document.createElement('button');
-                    removeBtn.type = 'button';
-                    removeBtn.textContent = 'Verwijderen';
-                    removeBtn.style.background = '#ef4444';
-                    removeBtn.style.color = 'white';
-                    removeBtn.style.border = 'none';
-                    removeBtn.style.padding = '6px 10px';
-                    removeBtn.style.borderRadius = '6px';
-                    removeBtn.style.cursor = 'pointer';
-                    removeBtn.onclick = function() {
-                        const dt = new DataTransfer();
-                        Array.from(fileInput.files).forEach((f, i) => { if (i !== index) dt.items.add(f); });
-                        fileInput.files = dt.files;
-                        renderFileList();
-                    };
-                    actions.appendChild(removeBtn);
-                    li.appendChild(name);
-                    li.appendChild(actions);
-                    filesList.appendChild(li);
-                });
+    <div class="card">
+        <div class="card-header">
+            <h1>Klacht Registreren</h1>
+            <p>Vul het formulier in om een nieuwe klacht aan te maken</p>
+        </div>
+
+        <div class="card-body">
+            <div class="user-info">
+                <strong>Ingelogd als:</strong> {{ user_naam }} ({{ session.get('user_rol') }})
+            </div>
+
+            <form method="POST" enctype="multipart/form-data">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="businessunit" class="required">Businessunit</label>
+                        <select name="businessunit" id="businessunit" required>
+                            <option value="">Kies businessunit</option>
+                            {% for bu in businessunits %}
+                                <option value="{{ bu }}">{{ bu }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="klant_naam" class="required">Klant</label>
+                        <input type="text" name="klant_naam" id="klant_naam" list="klanten_datalist" placeholder="Begin met typen..." required>
+                        <input type="hidden" name="klant_id" id="klant_id">
+                        <datalist id="klanten_datalist">
+                            {% for klant in klanten %}
+                                <option value="{{ klant.klantnaam }}" data-id="{{ klant.klant_id }}"></option>
+                            {% endfor %}
+                        </datalist>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="ondernemingsnummer" class="required">Ondernemingsnummer klant</label>
+                        <input type="text" name="ondernemingsnummer" id="ondernemingsnummer" placeholder="Ondernemingsnummer" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="categorie_id" class="required">Probleemcategorie</label>
+                        <select name="categorie_id" id="categorie_id" required>
+                            <option value="">Selecteer een categorie</option>
+                            {% for categorie in categorieen %}
+                                <option value="{{ categorie.categorie_id }}">{{ categorie.type }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="form-group full-width">
+                        <label for="order_nummer" class="required">Ordernummer</label>
+                        <input type="text" name="order_nummer" id="order_nummer" required placeholder="Voer ordernummer in">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="artikelnummer" class="required">Artikelnummer</label>
+                        <input type="text" name="artikelnummer" id="artikelnummer" required placeholder="Voer artikelnummer in">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="aantal_eenheden" class="required">Aantal eenheden</label>
+                        <input type="number" min="1" step="1" name="aantal_eenheden" id="aantal_eenheden" required placeholder="Aantal">
+                    </div>
+
+                    <div class="form-group full-width">
+                        <label for="mogelijke_oorzaak">Mogelijke oorzaak</label>
+                        <textarea name="mogelijke_oorzaak" id="mogelijke_oorzaak" placeholder="Beschrijf de mogelijke oorzaak van het probleem"></textarea>
+                    </div>
+
+                    <div class="form-group full-width">
+                        <label for="reden_afwijzing" class="required">Klacht omschrijving</label>
+                        <textarea name="reden_afwijzing" id="reden_afwijzing" required placeholder="Omschrijf de klacht"></textarea>
+                    </div>
+
+                    <div class="form-group full-width">
+                        <label for="bijlage">Bijlage (Foto)</label>
+                        <div class="file-upload" id="fileUploadArea">
+                            <input type="file" name="bijlage" id="bijlage" accept="image/*,application/pdf" multiple>
+                            <label for="bijlage" class="file-upload-label">
+                                <div class="upload-icon">&#128247;</div>
+                                <div id="fileUploadText">Klik om bestanden te uploaden</div>
+                                <div style="font-size: 0.9rem; color: #666;">(Optioneel - JPG, PNG, PDF, etc.)</div>
+                            </label>
+                        </div>
+                        <div id="filePreview" class="file-preview" style="display: none;">
+                            <ul id="filesList" style="list-style: none; padding-left: 0; margin: 0;"></ul>
+                        </div>
+                    </div>
+
+                    <div class="form-group full-width">
+                        <div class="auto-info">
+                            <strong>Automatisch ingevuld:</strong>
+                            Status: <strong>Ingediend</strong> |
+                            Datum: <strong>Vandaag</strong> |
+                            Verantwoordelijke: <strong>{{ user_naam }}</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="button-group">
+                    <a href="{{ url_for('main.user_dashboard') }}">
+                        <button type="button" class="btn btn-secondary">Annuleren</button>
+                    </a>
+                    <button type="submit" class="btn btn-primary">Klacht Indienen</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.querySelector('form');
+        const requiredFields = form.querySelectorAll('[required]');
+        const fileInput = document.getElementById('bijlage');
+        const filePreview = document.getElementById('filePreview');
+        const fileUploadText = document.getElementById('fileUploadText');
+        const filesList = document.getElementById('filesList');
+        const klantNaamInput = document.getElementById('klant_naam');
+        const klantIdHidden = document.getElementById('klant_id');
+        const klantDatalist = document.getElementById('klanten_datalist');
+
+        function renderFileList() {
+            filesList.innerHTML = '';
+            if (fileInput.files.length === 0) {
+                filePreview.style.display = 'none';
+                fileUploadText.textContent = 'Klik om bestanden te uploaden';
+                return;
             }
-
-            requiredFields.forEach(field => {
-                field.addEventListener('blur', function() {
-                    this.style.borderColor = this.value ? '#10b981' : '#e63946';
-                });
-            });
-
-            fileInput.addEventListener('change', function() {
-                if (this.files.length > 0) {
-                    fileUploadText.textContent = `${this.files.length} bestand(en) geselecteerd`;
+            filePreview.style.display = 'block';
+            Array.from(fileInput.files).forEach((file, index) => {
+                const li = document.createElement('li');
+                li.style.display = 'flex';
+                li.style.alignItems = 'center';
+                li.style.justifyContent = 'space-between';
+                li.style.padding = '6px 8px';
+                li.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
+                li.style.fontSize = '14px';
+                const name = document.createElement('span');
+                name.textContent = file.name;
+                const actions = document.createElement('div');
+                actions.style.display = 'flex';
+                actions.style.gap = '8px';
+                if (file.type && file.type.startsWith('image/')) {
+                    const img = document.createElement('img');
+                    img.src = URL.createObjectURL(file);
+                    img.style.maxWidth = '60px';
+                    img.style.maxHeight = '60px';
+                    img.style.borderRadius = '6px';
+                    img.style.marginRight = '8px';
+                    name.prepend(img);
+                }
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.textContent = 'Verwijderen';
+                removeBtn.style.background = '#ef4444';
+                removeBtn.style.color = 'white';
+                removeBtn.style.border = 'none';
+                removeBtn.style.padding = '6px 10px';
+                removeBtn.style.borderRadius = '6px';
+                removeBtn.style.cursor = 'pointer';
+                removeBtn.onclick = function() {
+                    const dt = new DataTransfer();
+                    Array.from(fileInput.files).forEach((f, i) => { if (i !== index) dt.items.add(f); });
+                    fileInput.files = dt.files;
                     renderFileList();
-                } else {
-                    filePreview.style.display = 'none';
-                    fileUploadText.textContent = 'Klik om bestanden te uploaden';
-                }
+                };
+                actions.appendChild(removeBtn);
+                li.appendChild(name);
+                li.appendChild(actions);
+                filesList.appendChild(li);
             });
+        }
 
-            form.addEventListener('submit', function(e) {
-                let isValid = true;
-                requiredFields.forEach(field => {
-                    if (!field.value) {
-                        field.style.borderColor = '#e63946';
-                        isValid = false;
-                    }
-                });
-                if (klantNaamInput && klantDatalist) {
-                    const match = Array.from(klantDatalist.options).find(opt => opt.value === klantNaamInput.value);
-                    if (!match) {
-                        isValid = false;
-                        alert('Kies een klant uit de lijst.');
-                    } else {
-                        klantIdHidden.value = match.dataset.id || '';
-                    }
-                }
-                if (!isValid) {
-                    e.preventDefault();
-                    alert('Gelieve alle verplichte velden in te vullen (aangegeven met *)');
-                }
+        requiredFields.forEach(field => {
+            field.addEventListener('blur', function() {
+                this.style.borderColor = this.value ? '#10b981' : '#e63946';
             });
+        });
 
-            if (klantNaamInput) {
-                klantNaamInput.addEventListener('change', () => {
-                    const match = Array.from(klantDatalist.options).find(opt => opt.value === klantNaamInput.value);
-                    klantIdHidden.value = match ? (match.dataset.id || '') : '';
-                });
+        fileInput.addEventListener('change', function() {
+            if (this.files.length > 0) {
+                fileUploadText.textContent = `${this.files.length} bestand(en) geselecteerd`;
+                renderFileList();
+            } else {
+                filePreview.style.display = 'none';
+                fileUploadText.textContent = 'Klik om bestanden te uploaden';
             }
         });
-    </script>
-</body>
-</html>
+
+        form.addEventListener('submit', function(e) {
+            let isValid = true;
+            requiredFields.forEach(field => {
+                if (!field.value) {
+                    field.style.borderColor = '#e63946';
+                    isValid = false;
+                }
+            });
+            if (klantNaamInput && klantDatalist) {
+                const match = Array.from(klantDatalist.options).find(opt => opt.value === klantNaamInput.value);
+                if (!match) {
+                    isValid = false;
+                    alert('Kies een klant uit de lijst.');
+                } else {
+                    klantIdHidden.value = match.dataset.id || '';
+                }
+            }
+            if (!isValid) {
+                e.preventDefault();
+                alert('Gelieve alle verplichte velden in te vullen (aangegeven met *)');
+            }
+        });
+
+        if (klantNaamInput) {
+            klantNaamInput.addEventListener('change', () => {
+                const match = Array.from(klantDatalist.options).find(opt => opt.value === klantNaamInput.value);
+                klantIdHidden.value = match ? (match.dataset.id || '') : '';
+            });
+        }
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,22 @@
+body.page-admin-users {
+    color:white;
+    padding:20px;
+}
+
+body.page-admin-users .container { max-width: 1100px; margin: 0 auto; }
+body.page-admin-users .header { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+
+body.page-admin-users .btn { background:#15803d; color:white; border:none; outline:none; border-radius:10px; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; font-weight:700; letter-spacing:0.1px; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,0.18); height:44px; padding:0 16px; transition: transform 120ms ease, box-shadow 120ms ease, background 160ms ease; }
+body.page-admin-users .btn:hover { transform: translateY(-1px); box-shadow:0 4px 10px rgba(0,0,0,0.2); background:#0f6a34; }
+
+body.page-admin-users .card { background:white; color:#1f2937; border-radius:12px; box-shadow:0 6px 16px rgba(0,0,0,0.14); padding:20px; margin-bottom:20px; }
+body.page-admin-users .form-row { display:grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap:10px; }
+@media(max-width:1100px){ body.page-admin-users .form-row { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); } }
+body.page-admin-users .users-table { width:100%; border-collapse: collapse; margin-top:10px; background:white; color:#1f2937; border-radius:12px; overflow:hidden; box-shadow:0 4px 12px rgba(0,0,0,0.12); }
+body.page-admin-users .users-table th, body.page-admin-users .users-table td { padding:12px 14px; border-bottom:1px solid #e5e7eb; text-align:left; }
+body.page-admin-users .users-table th { background:#10b981; color:white; }
+body.page-admin-users .small-btn { background:#15803d; color:white; border:none; border-radius:8px; padding:6px 10px; cursor:pointer; }
+body.page-admin-users .small-btn:hover { background:#0f6a34; }
+body.page-admin-users label { font-weight:600; font-size:13px; }
+body.page-admin-users input, body.page-admin-users select { padding:10px; border:1px solid #d1d5db; border-radius:8px; width:100%; box-sizing:border-box; }
+body.page-admin-users .flash-messages { margin-bottom: 16px; }

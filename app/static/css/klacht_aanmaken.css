@@ -1,0 +1,40 @@
+body.page-klacht-aanmaken {
+    background: linear-gradient(135deg, #3a7854 0%, #3a7854 100%);
+    min-height: 100vh;
+    padding: 20px;
+}
+
+body.page-klacht-aanmaken .container { max-width: 800px; margin: 0 auto; }
+body.page-klacht-aanmaken .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 30px; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); }
+body.page-klacht-aanmaken .card { background: white; border-radius: 12px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); overflow: hidden; }
+body.page-klacht-aanmaken .card-header { background: linear-gradient(135deg, #072619, #072619); color: white; padding: 25px; text-align: center; }
+body.page-klacht-aanmaken .card-header h1 { font-size: 1.8rem; margin-bottom: 8px; font-weight: 600; }
+body.page-klacht-aanmaken .card-header p { opacity: 0.9; font-size: 1rem; font-weight: 400; }
+body.page-klacht-aanmaken .card-body { padding: 30px; }
+body.page-klacht-aanmaken .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 25px; }
+body.page-klacht-aanmaken .form-group { margin-bottom: 20px; }
+body.page-klacht-aanmaken .form-group.full-width { grid-column: 1 / -1; }
+body.page-klacht-aanmaken label { display: block; margin-bottom: 8px; font-weight: 600; color: #212529; }
+body.page-klacht-aanmaken .required::after { content: " *"; color: #e63946; }
+body.page-klacht-aanmaken input, body.page-klacht-aanmaken select, body.page-klacht-aanmaken textarea { width: 100%; padding: 12px 16px; border: 2px solid #d1d5db; border-radius: 8px; font-size: 1rem; transition: all 0.3s ease; background: #f8f9fa; font-weight: 400; }
+body.page-klacht-aanmaken input:focus, body.page-klacht-aanmaken select:focus, body.page-klacht-aanmaken textarea:focus { outline: none; border-color: #072619; background: white; box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1); }
+body.page-klacht-aanmaken textarea { resize: vertical; min-height: 100px; }
+body.page-klacht-aanmaken .file-upload { border: 2px dashed #d1d5db; padding: 30px; text-align: center; border-radius: 8px; background: #f8f9fa; transition: all 0.3s ease; cursor: pointer; position: relative; }
+body.page-klacht-aanmaken .file-upload:hover { border-color: #072619; background: #f0fdf4; }
+body.page-klacht-aanmaken .file-upload input { display: none; }
+body.page-klacht-aanmaken .file-upload-label { display: flex; flex-direction: column; align-items: center; gap: 10px; cursor: pointer; }
+body.page-klacht-aanmaken .upload-icon { font-size: 2rem; color: #072619; }
+body.page-klacht-aanmaken .button-group { display: flex; gap: 15px; justify-content: flex-end; margin-top: 30px; padding-top: 20px; border-top: 1px solid #d1d5db; }
+body.page-klacht-aanmaken .btn-primary { background: #072619; color: white; border: none; border-radius: 8px; padding: 12px 30px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: all 0.3s ease; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
+body.page-klacht-aanmaken .btn-primary:hover { background: #0b7149; transform: translateY(-2px); box-shadow: 0 6px 12px rgba(16, 185, 129, 0.3); }
+body.page-klacht-aanmaken .btn-secondary { background: #f8f9fa; color: #212529; border: 1px solid #d1d5db; border-radius: 8px; padding: 12px 30px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: all 0.3s ease; }
+body.page-klacht-aanmaken .btn-secondary:hover { background: #d1d5db; transform: translateY(-2px); }
+body.page-klacht-aanmaken .user-info { background: linear-gradient(135deg, #3a7854, #3a7854); color: white; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; text-align: center; font-weight: 600; }
+body.page-klacht-aanmaken .auto-info { background: #dbeafe; color: #0e6634; padding: 12px 16px; border-radius: 6px; margin: 10px 0; border: 1px solid #074931; font-size: 0.9rem; }
+body.page-klacht-aanmaken .flash-messages { margin-bottom: 20px; }
+body.page-klacht-aanmaken .alert { padding: 15px 20px; border-radius: 8px; margin-bottom: 15px; font-weight: 500; }
+body.page-klacht-aanmaken .alert-error { background: #ffe6e6; color: #d00000; border: 1px solid #ffcccc; }
+body.page-klacht-aanmaken .alert-success { background: #e6ffe6; color: #3a7854; border: 1px solid #ccffcc; }
+body.page-klacht-aanmaken .file-preview { margin-top: 10px; padding: 10px; background: #f0fdf4; border-radius: 6px; border: 1px solid #3a7854; }
+body.page-klacht-aanmaken .file-preview img { max-width: 200px; max-height: 200px; border-radius: 4px; }
+@media (max-width: 768px) { body.page-klacht-aanmaken .form-grid { grid-template-columns: 1fr; } body.page-klacht-aanmaken .header { flex-direction: column; gap: 15px; text-align: center; } body.page-klacht-aanmaken .button-group { flex-direction: column; } }

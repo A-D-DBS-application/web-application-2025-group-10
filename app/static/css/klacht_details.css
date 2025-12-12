@@ -1,0 +1,34 @@
+body.page-klacht-details {
+    background: #23533e;
+    padding: 20px;
+    color: white;
+    min-height: 100vh;
+}
+
+body.page-klacht-details .container { max-width: 900px; margin: 0 auto; }
+body.page-klacht-details .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; gap:12px; flex-wrap:wrap; }
+
+body.page-klacht-details .details-card { background: white; border-radius: 16px; padding: 24px; margin-bottom: 20px; color: #1f2937; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); }
+body.page-klacht-details .detail-row { display: flex; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #e5e7eb; gap:12px; flex-wrap:wrap; }
+body.page-klacht-details .detail-label { font-weight: bold; width: 200px; color: #374151; }
+body.page-klacht-details .detail-value { flex: 1; color: #1f2937; min-width:200px; }
+body.page-klacht-details .details-card input,
+body.page-klacht-details .details-card select,
+body.page-klacht-details .details-card textarea,
+body.page-klacht-details .details-card .readonly-field { box-sizing: border-box; max-width: 100%; }
+body.page-klacht-details .save-btn { background: #0f5f1d; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; margin-right: 10px; transition: all 0.3s ease; }
+body.page-klacht-details .cancel-btn { background: #1e8549; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; text-decoration: none; display: inline-block; transition: all 0.3s ease; }
+body.page-klacht-details .edit-input, body.page-klacht-details .edit-textarea, body.page-klacht-details .edit-select { width: 100%; padding: 8px 12px; border: 2px solid #d1d5db; border-radius: 8px; font-size: 14px; }
+body.page-klacht-details .edit-textarea { resize: vertical; min-height: 80px; }
+body.page-klacht-details .button-group { margin-top: 20px; text-align: right; display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap; }
+body.page-klacht-details .readonly-field { background: #f9fafb; padding: 8px 12px; border-radius: 6px; border: 1px solid #e5e7eb; }
+body.page-klacht-details .attachment-image { max-width: 250px; max-height: 250px; border-radius: 8px; border: 1px solid #e5e7eb; display: block; margin-bottom: 8px; }
+body.page-klacht-details .attachment-filename { font-size: 13px; color: #4b5563; }
+body.page-klacht-details .attachment-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap:wrap; }
+body.page-klacht-details .attachment-meta { display: flex; flex-direction: column; gap: 4px; }
+body.page-klacht-details .attachment-actions { margin-left: auto; display: flex; gap: 8px; }
+body.page-klacht-details .deleted-attachment { opacity: 0.45; text-decoration: line-through; border-color: #fca5a5; background: #fff7f7; }
+body.page-klacht-details .delete-btn, body.page-klacht-details .undo-btn { background: #ef4444; color: white; border: none; padding: 6px 10px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 13px; }
+body.page-klacht-details .undo-btn { background: #6b7280; }
+body.page-klacht-details .tag { background:#e5e7eb; padding:4px 8px; border-radius:8px; font-size:12px; color:#374151; display:inline-block; }
+@media(max-width:768px){ body.page-klacht-details .detail-label { width: 140px; } }

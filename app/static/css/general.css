@@ -1,0 +1,78 @@
+:root {
+    --bg-main: #23533e;
+    --green-main: #15803d;
+    --green-dark: #0f5f1d;
+    --green-soft: #d1fbe4;
+    --panel: #ffffff;
+    --text-dark: #1f2937;
+    --border-soft: #d1d5db;
+    --warning-bg: #fef08a;
+    --warning-text: #854d0e;
+    --info-bg: #e0f2fe;
+    --info-text: #075985;
+    --error-bg: #fee2e2;
+    --error-text: #b91c1c;
+    --success-bg: #dcfce7;
+    --success-text: #166534;
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Inter', Arial, sans-serif;
+    background: var(--bg-main);
+    color: white;
+}
+
+a { text-decoration: none; }
+
+.container {
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.back-button {
+    background: var(--green-main);
+    color: white;
+    padding: 12px 24px;
+    text-decoration: none;
+    border-radius: 12px;
+    font-weight: bold;
+    transition: all 0.3s ease;
+}
+.back-button:hover { background: #0f6a34; transform: translateY(-2px); }
+
+.alert { padding: 14px; border-radius: 10px; margin-bottom: 12px; text-align: center; font-weight: 600; }
+.alert-success { background: var(--success-bg); color: var(--success-text); border: 1px solid #bbf7d0; }
+.alert-error { background: var(--error-bg); color: var(--error-text); border: 1px solid #fecaca; }
+.alert-info { background: var(--info-bg); color: var(--info-text); border: 1px solid #bae6fd; }
+
+.status-badge { padding: 6px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; display: inline-block; }
+.status-Ingediend { background: var(--warning-bg); color: var(--warning-text); }
+.status-Goedgekeurd { background: #d1ecf1; color: #0c5460; }
+.status-Afgewezen { background: #f8d7da; color: #721c24; }
+.status-Inbehandeling { background: #dbeafe; color: #1d4ed8; }
+.status-Afgehandeld { background: #e2e3e5; color: #383d41; }
+
+.priority-high { color: #b91c1c; font-weight: bold; background: #fecaca; padding: 6px 12px; border-radius: 8px; display: inline-block; border: 1px solid #ef4444; }
+.priority-normal { color: #6b7280; background: #f3f4f6; padding: 6px 12px; border-radius: 8px; display: inline-block; }
+
+.btn-main {
+    background: var(--green-main);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.18);
+    padding: 12px 18px;
+    transition: transform 120ms ease, box-shadow 120ms ease, background 160ms ease;
+}
+.btn-main:hover { transform: translateY(-1px); box-shadow:0 4px 10px rgba(0,0,0,0.2); background:#0f6a34; }

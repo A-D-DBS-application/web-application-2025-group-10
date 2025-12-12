@@ -1,332 +1,294 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Klacht Details</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-        body { font-family: Arial, sans-serif; background: #23533e; margin: 0; padding: 20px; color: white; min-height: 100vh; }
-        .container { max-width: 900px; margin: 0 auto; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; gap:12px; flex-wrap:wrap; }
-        .back-button { background: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 12px; font-weight: bold; transition: all 0.3s ease; }
-        .back-button:hover { background: #059669; transform: translateY(-2px); }
-        .details-card { background: white; border-radius: 16px; padding: 24px; margin-bottom: 20px; color: #1f2937; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); }
-        .detail-row { display: flex; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #e5e7eb; gap:12px; flex-wrap:wrap; }
-        .detail-label { font-weight: bold; width: 200px; color: #374151; }
-        .detail-value { flex: 1; color: #1f2937; min-width:200px; }
-        .details-card input,
-        .details-card select,
-        .details-card textarea,
-        .details-card .readonly-field { box-sizing: border-box; max-width: 100%; }
-        .status-badge { padding: 6px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; }
-        .status-Ingediend { background: #fff3cd; color: #856404; }
-        .status-Goedgekeurd { background: #d1ecf1; color: #0c5460; }
-        .status-Afgewezen { background: #f8d7da; color: #721c24; }
-        .status-Inbehandeling { background: #d4edda; color: #155724; }
-        .status-Afgehandeld { background: #e2e3e5; color: #383d41; }
-        .priority-high { color: #dc2626; font-weight: bold; background: #fee2e2; padding: 6px 12px; border-radius: 8px; }
-        .priority-normal { color: #6b7280; background: #f3f4f6; padding: 6px 12px; border-radius: 8px; }
-        .save-btn { background: #0f5f1d; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; margin-right: 10px; transition: all 0.3s ease; }
-        .cancel-btn { background: #1e8549; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; text-decoration: none; display: inline-block; transition: all 0.3s ease; }
-        .edit-input, .edit-textarea, .edit-select { width: 100%; padding: 8px 12px; border: 2px solid #d1d5db; border-radius: 8px; font-size: 14px; }
-        .edit-textarea { resize: vertical; min-height: 80px; }
-        .button-group { margin-top: 20px; text-align: right; display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap; }
-        .readonly-field { background: #f9fafb; padding: 8px 12px; border-radius: 6px; border: 1px solid #e5e7eb; }
-        .attachment-image { max-width: 250px; max-height: 250px; border-radius: 8px; border: 1px solid #e5e7eb; display: block; margin-bottom: 8px; }
-        .attachment-filename { font-size: 13px; color: #4b5563; }
-        .attachment-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap:wrap; }
-        .attachment-meta { display: flex; flex-direction: column; gap: 4px; }
-        .attachment-actions { margin-left: auto; display: flex; gap: 8px; }
-        .deleted-attachment { opacity: 0.45; text-decoration: line-through; border-color: #fca5a5; background: #fff7f7; }
-        .delete-btn, .undo-btn { background: #ef4444; color: white; border: none; padding: 6px 10px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 13px; }
-        .undo-btn { background: #6b7280; }
-        .tag { background:#e5e7eb; padding:4px 8px; border-radius:8px; font-size:12px; color:#374151; display:inline-block; }
-        @media(max-width:768px){ .detail-label { width: 140px; } }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <a href="{{ url_for('main.user_klachten') }}" class="back-button">Terug naar Mijn Klachten</a>
-            <h1>Klacht Details #{{ klacht_id }} – Rol: {{ session.get('user_rol') }}</h1>
-        </div>
-
-        <form method="POST" action="{{ url_for('main.klacht_bewerken', klacht_id=klacht_id) }}" enctype="multipart/form-data">
-            <div class="details-card">
-                <div class="detail-row">
-                    <div class="detail-label">Klacht ID:</div>
-                    <div class="detail-value"><div class="readonly-field">#{{ klacht.klacht_id }}</div></div>
-                </div>
-                <div class="detail-row">
-                    <div class="detail-label">Datum Melding:</div>
-                    <div class="detail-value">
-                        <div class="readonly-field">
-                            {% if klacht.datum_melding %}
-                                {% if 'T' in klacht.datum_melding %}
-                                    {{ klacht.datum_melding.split('T')[0] }}
-                                {% else %}
-                                    {{ klacht.datum_melding[:10] if klacht.datum_melding|length >= 10 else klacht.datum_melding }}
-                                {% endif %}
-                            {% else %}Onbekend{% endif %}
-                        </div>
-                    </div>
-                </div>
-                <div class="detail-row">
-                    <div class="detail-label">Klant:</div>
-                    <div class="detail-value">
-                        <div class="readonly-field">
-                            {% if klacht.klant %}{{ klacht.klant.klantnaam }} (ID: {{ klacht.klant_id }}){% else %}Klant ID: {{ klacht.klant_id }}{% endif %}
-                        </div>
-                    </div>
-                </div>
-                <div class="detail-row">
-                    <div class="detail-label">Verantwoordelijke:</div>
-                    <div class="detail-value">
-                        <div class="readonly-field">
-                            {% if klacht.vertegenwoordiger and klacht.vertegenwoordiger.get('naam') %}
-                                {{ klacht.vertegenwoordiger.get('naam') }}
-                            {% else %}
-                                {% if klacht.vertegenwoordiger_id %}Gebruiker ID: {{ klacht.vertegenwoordiger_id }}{% else %}Onbekend{% endif %}
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-                <div class="detail-row">
-                    <div class="detail-label">Businessunit:</div>
-                    <div class="detail-value">
-                        <div class="readonly-field">{{ klacht.productiebedrijf or 'Onbekend' }}</div>
-                    </div>
-                </div>
-                <div class="detail-row">
-                    <div class="detail-label">Status:</div>
-                    <div class="detail-value">
-                        <span class="status-badge status-{{ klacht.status.replace(' ', '') }}">{{ klacht.status }}</span>
-                    </div>
-                </div>
-                <div class="detail-row">
-                    <div class="detail-label">Prioriteit:</div>
-                    <div class="detail-value">
-                        {% if klacht.prioriteit %}<span class="priority-high">Hoog</span>{% else %}<span class="priority-normal">Normaal</span>{% endif %}
-                    </div>
-                </div>
-                <div class="detail-row">
-                    <div class="detail-label">GM Opmerking:</div>
-                    <div class="detail-value"><div class="readonly-field">{{ klacht.gm_opmerking or 'Geen opmerking' }}</div></div>
-                </div>
-
-                {% if klacht.bijlages %}
-                <div class="detail-row">
-                    <div class="detail-label">Bijlagen:</div>
-                    <div class="detail-value">
-                        <div id="bijlages-list">
-                            {% for bijlage in klacht.bijlages %}
-                                {% set bijlage_id = bijlage.get('id') if bijlage is mapping and bijlage.get('id') else loop.index %}
-                                {% set bijlage_url = bijlage.get('url') if bijlage is mapping and bijlage.get('url') else (bijlage if bijlage is string else '') %}
-                                {% set bijlage_naam = bijlage.get('naam') if bijlage is mapping and bijlage.get('naam') else (bijlage_url.split('/')[-1] if bijlage_url and '/' in bijlage_url else ('bijlage_' ~ loop.index)) %}
-                                {% set is_image = bijlage.get('is_image') if bijlage is mapping and bijlage.get('is_image') is not none else (bijlage_url.startswith('data:image') if bijlage_url else False) %}
-                                <div class="attachment-row" id="bijlage-row-{{ bijlage_id }}">
-                                    <a href="{{ bijlage_url }}" target="_blank" aria-label="Open bijlage {{ bijlage_naam }}">
-                                        {% if is_image %}
-                                             <img src="{{ bijlage_url }}" alt="{{ bijlage_naam }}" class="attachment-image">
-                                         {% else %}
-                                             <img src="/static/icons/file-icon.png" alt="Bestand {{ bijlage_naam }}" class="attachment-image">
-                                         {% endif %}
-                                    </a>
-                                    <div class="attachment-meta">
-                                        <div class="attachment-filename">{{ bijlage_naam }}</div>
-                                        <div style="font-size: 12px; color: #6b7280;">Klik om te openen in nieuw tabblad.</div>
-                                    </div>
-                                    <div class="attachment-actions">
-                                        <button type="button" class="delete-btn" onclick="toggleDelete('{{ bijlage_id }}')">Verwijderen</button>
-                                        <button type="button" class="undo-btn" style="display:none;" onclick="toggleDelete('{{ bijlage_id }}', true)">Ongedaan</button>
-                                    </div>
-                                </div>
-                            {% endfor %}
-                        </div>
-                    </div>
-                </div>
-                {% endif %}
-
-                <div class="detail-row">
-                    <label class="detail-label" for="new_bijlages">Nieuwe Bijlages:</label>
-                    <div class="detail-value">
-                        <input id="new_bijlages" name="new_bijlages" type="file" accept="image/*,application/pdf" multiple class="edit-input">
-                        <div style="font-size: 13px; color: #6b7280; margin-top: 6px;">Accepteert afbeeldingen en PDF-bestanden.</div>
-                    </div>
-                </div>
-                <input type="hidden" name="deleted_bijlages" id="deleted_bijlages" value="">
-
-                {% if session.get('user_rol') in ['Admin', 'Key user'] %}
-                <div class="detail-row">
-                    <div class="detail-label">Status & prioriteit:</div>
-                    <div class="detail-value">
-                        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                            <select name="status" class="edit-select" id="status_select">
-                                <option value="">Wijzig status</option>
-                                <option value="Ingediend">Ingediend</option>
-                                <option value="In behandeling">In behandeling</option>
-                                <option value="Afgehandeld">Afgehandeld</option>
-                                <option value="Afgewezen">Afgewezen</option>
-                            </select>
-                            <label style="display:flex;align-items:center;gap:6px;">
-                                <input type="checkbox" name="prioriteit" {% if klacht.prioriteit %}checked{% endif %}> Prioriteit
-                            </label>
-                        </div>
-                        <div style="margin-top:8px;">
-                            <label for="status_opmerking">Opmerking:</label>
-                            <input type="text" name="status_opmerking" class="edit-input" placeholder="Korte opmerking...">
-                        </div>
-                    </div>
-                </div>
-                {% endif %}
-
-                {% if session.get('user_rol') in ['Admin', 'Key user'] and vertegenw %}
-                <div class="detail-row">
-                    <div class="detail-label">Toewijzen aan verantwoordelijke:</div>
-                    <div class="detail-value">
-                        <form action="{{ url_for('main.keyuser_assign_klacht', klacht_id=klacht_id) }}" method="POST" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                            <select name="vertegenwoordiger_id" class="edit-select" required>
-                                <option value="">Selecteer verantwoordelijke</option>
-                                {% for r in vertegenw %}
-                                    <option value="{{ r.gebruiker_id }}" {% if klacht.vertegenwoordiger_id == r.gebruiker_id %}selected{% endif %}>{{ r.naam }}</option>
-                                {% endfor %}
-                            </select>
-                            <button type="submit" class="save-btn">Toewijzen</button>
-                        </form>
-                    </div>
-                </div>
-                {% endif %}
-
-                <div class="detail-row">
-                    <div class="detail-label">Ordernummer:</div>
-                    <div class="detail-value">
-                        <input type="text" name="order_nummer" value="{{ klacht.order_nummer or '' }}" class="edit-input" placeholder="Voer ordernummer in" required>
-                    </div>
-                </div>
-
-                <div class="detail-row">
-                    <div class="detail-label">Artikelnummer:</div>
-                    <div class="detail-value">
-                        <input type="text" name="artikelnummer" value="{{ klacht.artikelnummer or '' }}" class="edit-input" placeholder="Voer artikelnummer in" required>
-                    </div>
-                </div>
-
-                <div class="detail-row">
-                    <div class="detail-label">Aantal eenheden:</div>
-                    <div class="detail-value">
-                        <input type="number" min="1" step="1" name="aantal_eenheden" value="{{ klacht.aantal_eenheden or '' }}" class="edit-input" placeholder="Aantal" required>
-                    </div>
-                </div>
-
-                <div class="detail-row">
-                    <div class="detail-label">Businessunit:</div>
-                    <div class="detail-value">
-                        <select name="productiebedrijf" class="edit-select" required>
-                            <option value="">Kies businessunit</option>
-                            {% for bu in businessunits %}
-                                <option value="{{ bu }}" {% if klacht.productiebedrijf == bu or klacht.businessunit == bu %}selected{% endif %}>{{ bu }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                </div>
-
-                <div class="detail-row">
-                    <div class="detail-label">Categorie:</div>
-                    <div class="detail-value">
-                        <select name="categorie_id" class="edit-select" required>
-                            {% for categorie in categorieen %}
-                                <option value="{{ categorie.categorie_id }}" {% if klacht.categorie_id == categorie.categorie_id %}selected{% endif %}>
-                                    {{ categorie.type }}
-                                </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                </div>
-
-                <div class="detail-row">
-                    <div class="detail-label">Mogelijke oorzaak:</div>
-                    <div class="detail-value">
-                        <textarea name="mogelijke_oorzaak" class="edit-textarea" placeholder="Beschrijf de mogelijke oorzaak">{{ klacht.mogelijke_oorzaak or '' }}</textarea>
-                    </div>
-                </div>
-
-                <div class="detail-row">
-                    <div class="detail-label">Reden van afwijzing door de klant:</div>
-                    <div class="detail-value">
-                        <textarea name="reden_afwijzing" class="edit-textarea" placeholder="Geef de reden voor afwijzing op" required>{{ klacht.reden_afwijzing or '' }}</textarea>
-                    </div>
-                </div>
-
-                <div class="detail-row">
-                    <div class="detail-label">Ondernemingsnummer klant:</div>
-                    <div class="detail-value">
-                        <input type="text" name="ondernemingsnummer" value="{{ klacht.ondernemingsnummer or '' }}" class="edit-input" placeholder="Ondernemingsnummer">
-                    </div>
-                </div>
-
-                <div class="button-group">
-                    <button type="submit" class="save-btn">Opslaan</button>
-                    <a href="{{ url_for('main.klacht_details', klacht_id=klacht_id) }}" class="cancel-btn">Annuleren</a>
-                </div>
-            </div>
-        </form>
-
-        <div class="details-card" style="margin-top: 20px;">
-            <h2>Status Historiek</h2>
-            {% if statushistoriek %}
-                <ul style="list-style:none; padding-left:0;">
-                {% for sh in statushistoriek %}
-                    <li style="padding:8px 0; border-bottom:1px solid #e5e7eb;">
-                        <strong>{{ sh.datum_wijziging.split('T')[0] }} {{ sh.datum_wijziging.split('T')[1][:8] if sh.datum_wijziging and 'T' in sh.datum_wijziging else '' }}</strong>
-                        – {{ sh.oude_status }} → {{ sh.nieuwe_status }}
-                    </li>
-                {% endfor %}
-                </ul>
-            {% else %}
-                <div style="color:#6b7280;">Nog geen wijzigingen</div>
-            {% endif %}
-        </div>
+{% extends "base.html" %}
+{% block title %}Klacht Details{% endblock %}
+{% block body_class %}page-klacht-details{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/klacht_details.css') }}">
+{% endblock %}
+{% block content %}
+<div class="container">
+    <div class="header">
+        <a href="{{ url_for('main.user_klachten') }}" class="back-button">Terug naar Mijn Klachten</a>
+        <h1>Klacht Details #{{ klacht_id }} - Rol: {{ session.get('user_rol') }}</h1>
     </div>
 
-    <script>
-        function toggleDelete(bijlageId, forceUndo) {
-            const row = document.getElementById('bijlage-row-' + bijlageId);
-            if (!row) return;
-            const deleteBtn = row.querySelector('.delete-btn');
-            const undoBtn = row.querySelector('.undo-btn');
-            const hidden = document.getElementById('deleted_bijlages');
-            const alreadyDeleted = row.classList.contains('deleted-attachment');
-            let newDeletedState = forceUndo ? false : !alreadyDeleted;
-            if (newDeletedState) {
-                row.classList.add('deleted-attachment');
-                deleteBtn.style.display = 'none';
-                undoBtn.style.display = 'inline-block';
-            } else {
-                row.classList.remove('deleted-attachment');
-                deleteBtn.style.display = 'inline-block';
-                undoBtn.style.display = 'none';
-            }
-            const current = hidden.value ? hidden.value.split(',').filter(Boolean) : [];
-            const idx = current.indexOf(String(bijlageId));
-            if (newDeletedState && idx === -1) current.push(String(bijlageId));
-            if (!newDeletedState && idx !== -1) current.splice(idx, 1);
-            hidden.value = current.join(',');
+    <form method="POST" action="{{ url_for('main.klacht_bewerken', klacht_id=klacht_id) }}" enctype="multipart/form-data">
+        <div class="details-card">
+            <div class="detail-row">
+                <div class="detail-label">Klacht ID:</div>
+                <div class="detail-value"><div class="readonly-field">#{{ klacht.klacht_id }}</div></div>
+            </div>
+            <div class="detail-row">
+                <div class="detail-label">Datum Melding:</div>
+                <div class="detail-value">
+                    <div class="readonly-field">
+                        {% if klacht.datum_melding %}
+                            {% if 'T' in klacht.datum_melding %}
+                                {{ klacht.datum_melding.split('T')[0] }}
+                            {% else %}
+                                {{ klacht.datum_melding[:10] if klacht.datum_melding|length >= 10 else klacht.datum_melding }}
+                            {% endif %}
+                        {% else %}Onbekend{% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="detail-row">
+                <div class="detail-label">Klant:</div>
+                <div class="detail-value">
+                    <div class="readonly-field">
+                        {% if klacht.klant %}{{ klacht.klant.klantnaam }} (ID: {{ klacht.klant_id }}){% else %}Klant ID: {{ klacht.klant_id }}{% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="detail-row">
+                <div class="detail-label">Verantwoordelijke:</div>
+                <div class="detail-value">
+                    <div class="readonly-field">
+                        {% if klacht.verantwoordelijke and klacht.verantwoordelijke.get('naam') %}
+                            {{ klacht.verantwoordelijke.get('naam') }}
+                        {% elif klacht.vertegenwoordiger and klacht.vertegenwoordiger.get('naam') %}
+                            {{ klacht.vertegenwoordiger.get('naam') }}
+                        {% else %}
+                            {% if klacht.verantwoordelijke_id or klacht.vertegenwoordiger_id %}Gebruiker ID: {{ klacht.verantwoordelijke_id or klacht.vertegenwoordiger_id }}{% else %}Onbekend{% endif %}
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="detail-row">
+                <div class="detail-label">Businessunit:</div>
+                <div class="detail-value">
+                    <div class="readonly-field">{{ klacht.businessunit or 'Onbekend' }}</div>
+                </div>
+            </div>
+            <div class="detail-row">
+                <div class="detail-label">Status:</div>
+                <div class="detail-value">
+                    <span class="status-badge status-{{ klacht.status.replace(' ', '') }}">{{ klacht.status }}</span>
+                </div>
+            </div>
+            <div class="detail-row">
+                <div class="detail-label">Prioriteit:</div>
+                <div class="detail-value">
+                    {% if klacht.prioriteit %}<span class="priority-high">Hoog</span>{% else %}<span class="priority-normal">Normaal</span>{% endif %}
+                </div>
+            </div>
+            <div class="detail-row">
+                <div class="detail-label">Opmerking statuswijziging:</div>
+                <div class="detail-value"><div class="readonly-field">{{ klacht.opmerking_status_wijziging or klacht.gm_opmerking or 'Geen opmerking' }}</div></div>
+            </div>
+
+            {% if klacht.bijlages %}
+            <div class="detail-row">
+                <div class="detail-label">Bijlagen:</div>
+                <div class="detail-value">
+                    <div id="bijlages-list">
+                        {% for bijlage in klacht.bijlages %}
+                            {% set bijlage_id = bijlage.get('id') if bijlage is mapping and bijlage.get('id') else loop.index %}
+                            {% set bijlage_url = bijlage.get('url') if bijlage is mapping and bijlage.get('url') else (bijlage if bijlage is string else '') %}
+                            {% set bijlage_naam = bijlage.get('naam') if bijlage is mapping and bijlage.get('naam') else (bijlage_url.split('/')[-1] if bijlage_url and '/' in bijlage_url else ('bijlage_' ~ loop.index)) %}
+                            {% set is_image = bijlage.get('is_image') if bijlage is mapping and bijlage.get('is_image') is not none else (bijlage_url.startswith('data:image') if bijlage_url else False) %}
+                            <div class="attachment-row" id="bijlage-row-{{ bijlage_id }}">
+                                <a href="{{ bijlage_url }}" target="_blank" aria-label="Open bijlage {{ bijlage_naam }}">
+                                    {% if is_image %}
+                                         <img src="{{ bijlage_url }}" alt="{{ bijlage_naam }}" class="attachment-image">
+                                     {% else %}
+                                         <img src="/static/icons/file-icon.png" alt="Bestand {{ bijlage_naam }}" class="attachment-image">
+                                     {% endif %}
+                                </a>
+                                <div class="attachment-meta">
+                                    <div class="attachment-filename">{{ bijlage_naam }}</div>
+                                    <div style="font-size: 12px; color: #6b7280;">Klik om te openen in nieuw tabblad.</div>
+                                </div>
+                                <div class="attachment-actions">
+                                    <button type="button" class="delete-btn" onclick="toggleDelete('{{ bijlage_id }}')">Verwijderen</button>
+                                    <button type="button" class="undo-btn" style="display:none;" onclick="toggleDelete('{{ bijlage_id }}', true)">Ongedaan</button>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="detail-row">
+                <label class="detail-label" for="new_bijlages">Nieuwe Bijlages:</label>
+                <div class="detail-value">
+                    <input id="new_bijlages" name="new_bijlages" type="file" accept="image/*,application/pdf" multiple class="edit-input">
+                    <div style="font-size: 13px; color: #6b7280; margin-top: 6px;">Accepteert afbeeldingen en PDF-bestanden.</div>
+                </div>
+            </div>
+            <input type="hidden" name="deleted_bijlages" id="deleted_bijlages" value="">
+
+            {% if session.get('user_rol') in ['Admin', 'Key user'] %}
+            <div class="detail-row">
+                <div class="detail-label">Status & prioriteit:</div>
+                <div class="detail-value">
+                    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                        <select name="status" class="edit-select" id="status_select">
+                            <option value="">Wijzig status</option>
+                            <option value="Ingediend">Ingediend</option>
+                            <option value="In behandeling">In behandeling</option>
+                            <option value="Afgehandeld">Afgehandeld</option>
+                            <option value="Afgewezen">Afgewezen</option>
+                        </select>
+                        <label style="display:flex;align-items:center;gap:6px;">
+                            <input type="checkbox" name="prioriteit" {% if klacht.prioriteit %}checked{% endif %}> Prioriteit
+                        </label>
+                    </div>
+                    <div style="margin-top:8px;">
+                        <label for="status_opmerking">Opmerking:</label>
+                        <input type="text" name="status_opmerking" class="edit-input" placeholder="Korte opmerking...">
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if session.get('user_rol') in ['Admin', 'Key user'] and vertegenw %}
+            <div class="detail-row">
+                <div class="detail-label">Toewijzen aan verantwoordelijke:</div>
+                <div class="detail-value">
+                    <form action="{{ url_for('main.keyuser_assign_klacht', klacht_id=klacht_id) }}" method="POST" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                        <select name="vertegenwoordiger_id" class="edit-select" required>
+                            <option value="">Selecteer verantwoordelijke</option>
+                            {% for r in vertegenw %}
+                                <option value="{{ r.gebruiker_id }}" {% if (klacht.verantwoordelijke_id or klacht.vertegenwoordiger_id) == r.gebruiker_id %}selected{% endif %}>{{ r.naam }}</option>
+                            {% endfor %}
+                        </select>
+                        <button type="submit" class="save-btn">Toewijzen</button>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="detail-row">
+                <div class="detail-label">Ordernummer:</div>
+                <div class="detail-value">
+                    <input type="text" name="order_nummer" value="{{ klacht.order_nummer or '' }}" class="edit-input" placeholder="Voer ordernummer in" required>
+                </div>
+            </div>
+
+            <div class="detail-row">
+                <div class="detail-label">Artikelnummer:</div>
+                <div class="detail-value">
+                    <input type="text" name="artikelnummer" value="{{ klacht.artikelnummer or '' }}" class="edit-input" placeholder="Voer artikelnummer in" required>
+                </div>
+            </div>
+
+            <div class="detail-row">
+                <div class="detail-label">Aantal eenheden:</div>
+                <div class="detail-value">
+                    <input type="number" min="1" step="1" name="aantal_eenheden" value="{{ klacht.aantal_eenheden or '' }}" class="edit-input" placeholder="Aantal" required>
+                </div>
+            </div>
+
+            <div class="detail-row">
+                <div class="detail-label">Businessunit:</div>
+                <div class="detail-value">
+                    <select name="businessunit" class="edit-select" required>
+                        <option value="">Kies businessunit</option>
+                        {% for bu in businessunits %}
+                            <option value="{{ bu }}" {% if klacht.businessunit == bu %}selected{% endif %}>{{ bu }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="detail-row">
+                <div class="detail-label">Categorie:</div>
+                <div class="detail-value">
+                    <select name="categorie_id" class="edit-select" required>
+                        {% for categorie in categorieen %}
+                            <option value="{{ categorie.categorie_id }}" {% if klacht.categorie_id == categorie.categorie_id %}selected{% endif %}>
+                                {{ categorie.type }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="detail-row">
+                <div class="detail-label">Mogelijke oorzaak:</div>
+                <div class="detail-value">
+                    <textarea name="mogelijke_oorzaak" class="edit-textarea" placeholder="Beschrijf de mogelijke oorzaak">{{ klacht.mogelijke_oorzaak or '' }}</textarea>
+                </div>
+            </div>
+
+            <div class="detail-row">
+                <div class="detail-label">Klacht omschrijving:</div>
+                <div class="detail-value">
+                    <textarea name="reden_afwijzing" class="edit-textarea" placeholder="Omschrijf de klacht" required>{{ klacht.klacht_omschrijving or klacht.reden_afwijzing or '' }}</textarea>
+                </div>
+            </div>
+
+            <div class="detail-row">
+                <div class="detail-label">Ondernemingsnummer klant:</div>
+                <div class="detail-value">
+                    <input type="text" name="ondernemingsnummer" value="{{ klacht.ondernemingsnummer or '' }}" class="edit-input" placeholder="Ondernemingsnummer">
+                </div>
+            </div>
+
+            <div class="button-group">
+                <button type="submit" class="save-btn">Opslaan</button>
+                <a href="{{ url_for('main.klacht_details', klacht_id=klacht_id) }}" class="cancel-btn">Annuleren</a>
+            </div>
+        </div>
+    </form>
+
+    <div class="details-card" style="margin-top: 20px;">
+        <h2>Status Historiek</h2>
+        {% if statushistoriek %}
+            <ul style="list-style:none; padding-left:0;">
+            {% for sh in statushistoriek %}
+                <li style="padding:8px 0; border-bottom:1px solid #e5e7eb;">
+                    <strong>{{ sh.datum_wijziging.split('T')[0] }} {{ sh.datum_wijziging.split('T')[1][:8] if sh.datum_wijziging and 'T' in sh.datum_wijziging else '' }}</strong>
+                    – {{ sh.oude_status }} → {{ sh.nieuwe_status }}
+                </li>
+            {% endfor %}
+            </ul>
+        {% else %}
+            <div style="color:#6b7280;">Nog geen wijzigingen</div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+    function toggleDelete(bijlageId, forceUndo) {
+        const row = document.getElementById('bijlage-row-' + bijlageId);
+        if (!row) return;
+        const deleteBtn = row.querySelector('.delete-btn');
+        const undoBtn = row.querySelector('.undo-btn');
+        const hidden = document.getElementById('deleted_bijlages');
+        const alreadyDeleted = row.classList.contains('deleted-attachment');
+        let newDeletedState = forceUndo ? false : !alreadyDeleted;
+        if (newDeletedState) {
+            row.classList.add('deleted-attachment');
+            deleteBtn.style.display = 'none';
+            undoBtn.style.display = 'inline-block';
+        } else {
+            row.classList.remove('deleted-attachment');
+            deleteBtn.style.display = 'inline-block';
+            undoBtn.style.display = 'none';
         }
-        (function() {
-            const form = document.querySelector('form[enctype="multipart/form-data"]');
-            const statusSelect = document.getElementById('status_select');
-            if (!form) return;
-            form.addEventListener('submit', function(e) {
-                const hidden = document.getElementById('deleted_bijlages');
-                if (hidden && hidden.value) {
-                    const confirmed = confirm('Er zijn bijlagen gemarkeerd om te verwijderen. Doorgaan?');
-                    if (!confirmed) { e.preventDefault(); return false; }
-                }
-                if (statusSelect && statusSelect.value === 'Afgewezen') {
-                    const sure = confirm('Zeker dat je deze klacht wilt afwijzen?');
-                    if (!sure) { e.preventDefault(); return false; }
-                }
-            });
-        })();
-    </script>
-</body>
-</html>
+        const current = hidden.value ? hidden.value.split(',').filter(Boolean) : [];
+        const idx = current.indexOf(String(bijlageId));
+        if (newDeletedState && idx === -1) current.push(String(bijlageId));
+        if (!newDeletedState && idx !== -1) current.splice(idx, 1);
+        hidden.value = current.join(',');
+    }
+    (function() {
+        const form = document.querySelector('form[enctype="multipart/form-data"]');
+        const statusSelect = document.getElementById('status_select');
+        if (!form) return;
+        form.addEventListener('submit', function(e) {
+            const hidden = document.getElementById('deleted_bijlages');
+            if (hidden && hidden.value) {
+                const confirmed = confirm('Er zijn bijlagen gemarkeerd om te verwijderen. Doorgaan?');
+                if (!confirmed) { e.preventDefault(); return false; }
+            }
+            if (statusSelect && statusSelect.value === 'Afgewezen') {
+                const sure = confirm('Zeker dat je deze klacht wilt afwijzen?');
+                if (!sure) { e.preventDefault(); return false; }
+            }
+        });
+    })();
+</script>
+{% endblock %}
