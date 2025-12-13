@@ -76,12 +76,29 @@
             </thead>
             <tbody>
                 {% for u in gebruikers %}
+                {% set form_id = "update_user_" ~ u.gebruiker_id %}
                 <tr>
                     <td>{{ u.naam }}</td>
                     <td>{{ u.email }}</td>
-                    <td>{{ u.rol }}</td>
-                    <td>{{ u.businessunit_naam or '' }}</td>
                     <td>
+                        <select name="rol" form="{{ form_id }}">
+                            <option value="User" {{ 'selected' if u.rol == 'User' else '' }}>User</option>
+                            <option value="Key user" {{ 'selected' if u.rol == 'Key user' else '' }}>Key user</option>
+                            <option value="Admin" {{ 'selected' if u.rol == 'Admin' else '' }}>Admin</option>
+                        </select>
+                    </td>
+                    <td>
+                        <select name="businessunit" form="{{ form_id }}">
+                            <option value="" {% if not u.businessunit_naam %}selected{% endif %}>Geen</option>
+                            {% for bu in businessunits %}
+                            <option value="{{ bu }}" {% if u.businessunit_naam == bu %}selected{% endif %}>{{ bu }}</option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    <td>
+                        <form id="{{ form_id }}" action="{{ url_for('main.admin_update_user', user_id=u.gebruiker_id) }}" method="POST" style="display:inline;">
+                            <button type="submit" class="small-btn">Opslaan</button>
+                        </form>
                         <form action="{{ url_for('main.admin_delete_user', user_id=u.gebruiker_id) }}" method="POST" style="display:inline;">
                             <button type="submit" class="small-btn" onclick="return confirm('Gebruiker verwijderen?');">Verwijderen</button>
                         </form>

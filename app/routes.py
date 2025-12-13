@@ -322,6 +322,18 @@ def get_bu_value(obj):
         return ''
     return ''
 
+def is_klacht_today(klacht, today_str=None):
+    """Check if a complaint was created/entered today using multiple possible date fields."""
+    today_str = today_str or date.today().isoformat()
+    dm = str(
+        klacht.get('datum_melding')
+        or klacht.get('created_at')
+        or klacht.get('created')
+        or klacht.get('datum')
+        or ''
+    )
+    return dm[:10] == today_str
+
 # Helpers to normalize bijlages stored as TEXT (JSON string) in Supabase
 def normalize_bijlages(raw_bijlages):
     """Convert DB value (text with newline-separated urls or legacy json) to list of bijlage dicts."""
@@ -985,11 +997,8 @@ def admin_dashboard():
             klachten_all = klachten_resp.data if klachten_resp.data else []
             def is_open(k):
                 return (k.get('status') or '').strip() != 'Afgehandeld'
-            def is_today(k):
-                dm = str(k.get('datum_melding') or '')
-                return dm[:10] == today_str
             total_klachten = len([k for k in klachten_all if is_open(k)])
-            today_new = len([k for k in klachten_all if is_today(k)])
+            today_new = len([k for k in klachten_all if is_klacht_today(k, today_str)])
         except Exception as ke:
             print(f"Warning: count klachten failed: {ke}")
             total_klachten = 0
@@ -1258,16 +1267,6 @@ def keyuser_dashboard():
                     return True
                 return val == bu_name.strip()
 
-            def is_today(k):
-                dm = str(
-                    k.get('datum_melding')
-                    or k.get('created_at')
-                    or k.get('created')
-                    or k.get('datum')
-                    or ''
-                )
-                return dm[:10] == today_str
-
             klachten = [k for k in klachten_all if is_open(k) and bu_matches(k)]
 
             # fallback: als nog 0, tel alle niet-afgehandelde zonder BU-filter
@@ -1277,7 +1276,7 @@ def keyuser_dashboard():
             # tel nieuwe klachten van vandaag (status ongeacht, optioneel filter op BU)
             today_new = len([
                 k for k in klachten_all
-                if is_today(k) and (not bu_name or bu_matches(k))
+                if is_klacht_today(k, today_str) and (not bu_name or bu_matches(k))
             ])
         except Exception as e:
             print(f"Warning: counting klachten with local filter failed: {e}")
