@@ -17,6 +17,7 @@ from openpyxl import Workbook
 from openpyxl.drawing.image import Image as XLImage
 from openpyxl.worksheet.table import Table, TableStyleInfo
 import re
+from .category_suggester import suggest_probleemcategorie
 
 main = Blueprint('main', __name__)
 
@@ -307,6 +308,17 @@ def get_businessunits_list():
     except Exception as e:
         print(f"Warning: kon businessunits niet ophalen: {e}")
         return BUSINESSUNITS
+
+
+def find_categorie_id_by_type(categorieen, categorie_type):
+    """Zoek de categorie_id op basis van het type; helper voor autosuggestie."""
+    if not categorie_type:
+        return None
+    for categorie in categorieen or []:
+        cat_type = (categorie.get('type') or '').strip().lower()
+        if cat_type == str(categorie_type).strip().lower():
+            return categorie.get('categorie_id')
+    return None
 
 # Helper: normalize businessunit from complaint row
 def get_bu_value(obj):
@@ -778,6 +790,13 @@ def klacht_aanmaken():
         print(f"Error bij ophalen data: {e}")
         klanten = []
         categorieen = []
+
+    suggested_categorie_type = suggest_probleemcategorie(
+        request.form.get('reden_afwijzing', '').strip(),
+        request.form.get('mogelijke_oorzaak', '').strip()
+    )
+    suggested_categorie_id = find_categorie_id_by_type(categorieen, suggested_categorie_type)
+    selected_categorie_id = request.form.get('categorie_id', '').strip() or suggested_categorie_id
     
     if request.method == 'POST':
         try:
@@ -800,6 +819,12 @@ def klacht_aanmaken():
             print(f"  Artikelnummer: {artikelnummer}")
             print(f"  Aantal eenheden: {aantal_eenheden}")
             print(f"  Businessunit: {businessunit}")
+
+            suggested_categorie_type = suggest_probleemcategorie(klacht_omschrijving, mogelijke_oorzaak)
+            suggested_categorie_id = find_categorie_id_by_type(categorieen, suggested_categorie_type)
+            if not categorie_id and suggested_categorie_id:
+                categorie_id = str(suggested_categorie_id)
+            selected_categorie_id = categorie_id or suggested_categorie_id
             
             # Valideer verplichte velden
             if not klant_id and klant_naam:
@@ -827,7 +852,10 @@ def klacht_aanmaken():
                     user_naam=session.get('user_naam'),
                     klanten=klanten,
                     categorieen=categorieen,
-                    businessunits=get_businessunits_list()
+                    businessunits=get_businessunits_list(),
+                    suggested_categorie_id=suggested_categorie_id,
+                    suggested_categorie_type=suggested_categorie_type,
+                    selected_categorie_id=selected_categorie_id
                 )
 
             # Probeer ondernemingsnummer op te slaan bij de klant (indien beschikbaar)
@@ -961,8 +989,22 @@ def klacht_aanmaken():
         user_naam=session.get('user_naam'),
         klanten=klanten,
         categorieen=categorieen,
-        businessunits=get_businessunits_list()
+        businessunits=get_businessunits_list(),
+        suggested_categorie_id=suggested_categorie_id,
+        suggested_categorie_type=suggested_categorie_type,
+        selected_categorie_id=selected_categorie_id
     )
+
+
+@main.route('/user/klacht/suggest-categorie', methods=['POST'])
+def suggest_categorie():
+    if 'user_id' not in session or normalized_role() not in ('User', 'Key user', 'Admin'):
+        return {"error": "Unauthorized"}, 401
+    data = request.get_json(silent=True) or {}
+    klacht_omschrijving = (data.get('klacht_omschrijving') or '').strip()
+    mogelijke_oorzaak = (data.get('mogelijke_oorzaak') or '').strip()
+    suggested_type = suggest_probleemcategorie(klacht_omschrijving, mogelijke_oorzaak)
+    return {"suggested_type": suggested_type}, 200
 
 
 @main.route('/admin/dashboard')

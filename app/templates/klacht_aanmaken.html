@@ -39,15 +39,15 @@
                         <select name="businessunit" id="businessunit" required>
                             <option value="">Kies businessunit</option>
                             {% for bu in businessunits %}
-                                <option value="{{ bu }}">{{ bu }}</option>
+                                <option value="{{ bu }}" {% if (request.form.get('businessunit') or session.get('businessunit_naam')) == bu %}selected{% endif %}>{{ bu }}</option>
                             {% endfor %}
                         </select>
                     </div>
 
                     <div class="form-group">
                         <label for="klant_naam" class="required">Klant</label>
-                        <input type="text" name="klant_naam" id="klant_naam" list="klanten_datalist" placeholder="Begin met typen..." required>
-                        <input type="hidden" name="klant_id" id="klant_id">
+                        <input type="text" name="klant_naam" id="klant_naam" list="klanten_datalist" placeholder="Begin met typen..." value="{{ request.form.get('klant_naam','') }}" required>
+                        <input type="hidden" name="klant_id" id="klant_id" value="{{ request.form.get('klant_id','') }}">
                         <datalist id="klanten_datalist">
                             {% for klant in klanten %}
                                 <option value="{{ klant.klantnaam }}" data-id="{{ klant.klant_id }}"></option>
@@ -57,42 +57,47 @@
 
                     <div class="form-group">
                         <label for="ondernemingsnummer" class="required">Ondernemingsnummer klant</label>
-                        <input type="text" name="ondernemingsnummer" id="ondernemingsnummer" placeholder="Ondernemingsnummer" required>
+                        <input type="text" name="ondernemingsnummer" id="ondernemingsnummer" placeholder="Ondernemingsnummer" value="{{ request.form.get('ondernemingsnummer','') }}" required>
                     </div>
 
                     <div class="form-group">
                         <label for="categorie_id" class="required">Probleemcategorie</label>
+                        <div class="text-muted" style="font-size: 0.9rem; margin-bottom: 4px;">
+                            Voorgestelde categorie: <strong id="suggestedCategorieLabel">{{ suggested_categorie_type or 'Andere' }}</strong>
+                        </div>
                         <select name="categorie_id" id="categorie_id" required>
                             <option value="">Selecteer een categorie</option>
                             {% for categorie in categorieen %}
-                                <option value="{{ categorie.categorie_id }}">{{ categorie.type }}</option>
+                                <option value="{{ categorie.categorie_id }}" {% if selected_categorie_id and selected_categorie_id|int == categorie.categorie_id %}selected{% endif %}>
+                                    {{ categorie.type }}
+                                </option>
                             {% endfor %}
                         </select>
                     </div>
 
                     <div class="form-group full-width">
                         <label for="order_nummer" class="required">Ordernummer</label>
-                        <input type="text" name="order_nummer" id="order_nummer" required placeholder="Voer ordernummer in">
+                        <input type="text" name="order_nummer" id="order_nummer" value="{{ request.form.get('order_nummer','') }}" required placeholder="Voer ordernummer in">
                     </div>
 
                     <div class="form-group">
                         <label for="artikelnummer" class="required">Artikelnummer</label>
-                        <input type="text" name="artikelnummer" id="artikelnummer" required placeholder="Voer artikelnummer in">
+                        <input type="text" name="artikelnummer" id="artikelnummer" value="{{ request.form.get('artikelnummer','') }}" required placeholder="Voer artikelnummer in">
                     </div>
 
                     <div class="form-group">
                         <label for="aantal_eenheden" class="required">Aantal eenheden</label>
-                        <input type="number" min="1" step="1" name="aantal_eenheden" id="aantal_eenheden" required placeholder="Aantal">
+                        <input type="number" min="1" step="1" name="aantal_eenheden" id="aantal_eenheden" value="{{ request.form.get('aantal_eenheden','') }}" required placeholder="Aantal">
                     </div>
 
                     <div class="form-group full-width">
                         <label for="mogelijke_oorzaak">Mogelijke oorzaak</label>
-                        <textarea name="mogelijke_oorzaak" id="mogelijke_oorzaak" placeholder="Beschrijf de mogelijke oorzaak van het probleem"></textarea>
+                        <textarea name="mogelijke_oorzaak" id="mogelijke_oorzaak" placeholder="Beschrijf de mogelijke oorzaak van het probleem">{{ request.form.get('mogelijke_oorzaak','') }}</textarea>
                     </div>
 
                     <div class="form-group full-width">
                         <label for="reden_afwijzing" class="required">Klacht omschrijving</label>
-                        <textarea name="reden_afwijzing" id="reden_afwijzing" required placeholder="Omschrijf de klacht"></textarea>
+                        <textarea name="reden_afwijzing" id="reden_afwijzing" required placeholder="Omschrijf de klacht">{{ request.form.get('reden_afwijzing','') }}</textarea>
                     </div>
 
                     <div class="form-group full-width">
@@ -142,6 +147,51 @@
         const klantNaamInput = document.getElementById('klant_naam');
         const klantIdHidden = document.getElementById('klant_id');
         const klantDatalist = document.getElementById('klanten_datalist');
+        const klachtOmschrijvingInput = document.getElementById('reden_afwijzing');
+        const mogelijkeOorzaakInput = document.getElementById('mogelijke_oorzaak');
+        const categorieSelect = document.getElementById('categorie_id');
+        const suggestedLabel = document.getElementById('suggestedCategorieLabel');
+        let suggestTimer;
+
+        function scheduleCategorySuggestion() {
+            if (!categorieSelect) return;
+            clearTimeout(suggestTimer);
+            suggestTimer = setTimeout(fetchCategorySuggestion, 250);
+        }
+
+        async function fetchCategorySuggestion() {
+            const payload = {
+                klacht_omschrijving: klachtOmschrijvingInput ? klachtOmschrijvingInput.value : '',
+                mogelijke_oorzaak: mogelijkeOorzaakInput ? mogelijkeOorzaakInput.value : ''
+            };
+
+            // Geen request versturen als beide velden leeg zijn
+            if (!payload.klacht_omschrijving && !payload.mogelijke_oorzaak) {
+                return;
+            }
+
+            try {
+                const resp = await fetch('{{ url_for("main.suggest_categorie") }}', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify(payload)
+                });
+                if (!resp.ok) return;
+                const data = await resp.json();
+                if (data && data.suggested_type && categorieSelect) {
+                    const match = Array.from(categorieSelect.options).find(opt => opt.text.trim() === data.suggested_type);
+                    if (match) {
+                        match.selected = true;
+                    }
+                    if (suggestedLabel) {
+                        suggestedLabel.textContent = data.suggested_type;
+                    }
+                }
+            } catch (err) {
+                console.warn('Kon categorie suggestie niet ophalen', err);
+            }
+        }
 
         function renderFileList() {
             filesList.innerHTML = '';
@@ -240,6 +290,15 @@
                 klantIdHidden.value = match ? (match.dataset.id || '') : '';
             });
         }
+
+        if (klachtOmschrijvingInput) {
+            klachtOmschrijvingInput.addEventListener('input', scheduleCategorySuggestion);
+        }
+        if (mogelijkeOorzaakInput) {
+            mogelijkeOorzaakInput.addEventListener('input', scheduleCategorySuggestion);
+        }
+        // Initieel invullen als er al tekst aanwezig is (bij herladen met errors)
+        fetchCategorySuggestion();
     });
 </script>
 {% endblock %}
