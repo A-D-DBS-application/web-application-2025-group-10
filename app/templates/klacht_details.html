@@ -144,13 +144,13 @@
 
             {% if session.get('user_rol') in ['Admin', 'Key user'] and vertegenw %}
             <div class="detail-row">
-                <div class="detail-label">Toewijzen aan verantwoordelijke:</div>
+                <div class="detail-label">Toewijzen aan gebruiker:</div>
                 <div class="detail-value">
                     <form action="{{ url_for('main.keyuser_assign_klacht', klacht_id=klacht_id) }}" method="POST" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                         <select name="vertegenwoordiger_id" class="edit-select" required>
-                            <option value="">Selecteer verantwoordelijke</option>
+                            <option value="">Selecteer gebruiker</option>
                             {% for r in vertegenw %}
-                                <option value="{{ r.gebruiker_id }}" {% if (klacht.verantwoordelijke_id or klacht.vertegenwoordiger_id) == r.gebruiker_id %}selected{% endif %}>{{ r.naam }}</option>
+                                <option value="{{ r.gebruiker_id }}" {% if (klacht.verantwoordelijke_id or klacht.vertegenwoordiger_id) == r.gebruiker_id %}selected{% endif %}>{{ r.naam }}{% if r.rol %} ({{ r.rol }}){% endif %}</option>
                             {% endfor %}
                         </select>
                         <button type="submit" class="save-btn">Toewijzen</button>

@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Businessunits{% endblock %}
+{% block body_class %}page-admin-businessunits{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/admin_businessunits.css') }}">
+{% endblock %}
+{% block content %}
+<div class="container">
+    <div class="header">
+        <h1>Businessunits</h1>
+        <a href="{{ url_for('main.admin_dashboard') }}" class="btn">Terug naar dashboard</a>
+    </div>
+
+    <div class="flash-messages">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    {% set css = 'alert-success' if category == 'success' else 'alert-error' if category == 'error' else 'alert-info' %}
+                    <div class="alert {{ css }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+    </div>
+
+    <div class="card">
+        <h3>Nieuwe businessunit</h3>
+        <form action="{{ url_for('main.admin_create_businessunit') }}" method="POST" class="create-form">
+            <label for="naam">Naam</label>
+            <div class="form-row">
+                <input id="naam" name="naam" placeholder="Nieuwe businessunit" required>
+                <button type="submit" class="btn">Opslaan</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="card">
+        <h3>Overzicht</h3>
+        {% if businessunits %}
+        <table class="bu-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Naam</th>
+                    <th>Acties</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for bu in businessunits %}
+                <tr>
+                    <td>#{{ bu.businessunit_id }}</td>
+                    <td>{{ bu.naam }}</td>
+                    <td>
+                        <form action="{{ url_for('main.admin_delete_businessunit', businessunit_id=bu.businessunit_id) }}" method="POST" onsubmit="return confirm('Let op: er kunnen nog klachten aan deze businessunit gekoppeld zijn. Weet je zeker dat je deze businessunit wilt verwijderen?');" style="display:inline;">
+                            <button type="submit" class="small-btn">Verwijderen</button>
+                        </form>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+            <div class="empty-state">Geen businessunits gevonden.</div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

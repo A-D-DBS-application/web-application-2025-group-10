@@ -668,16 +668,15 @@ def klacht_details(klacht_id):
 
         # vertegenw if manager/key user
         vertegenw = []
-        if normalized_role() in ('Admin', 'Key user'):
+        current_role = normalized_role()
+        if current_role in ('Admin', 'Key user'):
             try:
-                rep_query = supabase.table("gebruiker").select("gebruiker_id, naam").eq("rol", "User")
-                if normalized_role() == 'Key user':
-                    my_pid = session.get('businessunit_id')
-                    if my_pid:
-                        rep_query = rep_query.eq("businessunit_id", safe_int(my_pid))
+                # Laat alle gebruikers (ongeacht rol) zien zodat je aan iedereen kunt toewijzen
+                rep_query = supabase.table("gebruiker").select("gebruiker_id, naam, rol, businessunit_id")
                 reps_resp = rep_query.execute()
                 check_supabase_response(reps_resp, "fetching reps")
-                vertegenw = reps_resp.data if reps_resp.data else []
+                vertegenw_raw = reps_resp.data if reps_resp.data else []
+                vertegenw = sorted(vertegenw_raw, key=lambda u: (u.get('naam') or '').lower())
             except Exception as e:
                 print(f"Warning: could not fetch vertegenw: {e}")
                 vertegenw = []
@@ -1180,6 +1179,21 @@ def admin_delete_user(user_id):
         flash('Fout bij verwijderen gebruiker', 'error')
     return redirect(url_for('main.admin_users_page'))
 
+@main.route('/admin/businessunits', methods=['GET'])
+def admin_businessunits_page():
+    if 'user_id' not in session or normalized_role() != 'Admin':
+        flash('Toegang geweigerd', 'error')
+        return redirect(url_for('main.login'))
+    try:
+        resp = supabase.table("businessunit").select("businessunit_id, naam").order("naam").execute()
+        check_supabase_response(resp, "fetch businessunits admin page")
+        businessunits = resp.data if resp.data else []
+    except Exception as e:
+        print(f"admin_businessunits_page error: {e}")
+        businessunits = []
+        flash('Kon businessunits niet ophalen', 'error')
+    return render_template('admin_businessunits.html', businessunits=businessunits)
+
 @main.route('/admin/businessunit', methods=['POST'])
 def admin_create_businessunit():
     if 'user_id' not in session or normalized_role() != 'Admin':
@@ -1188,15 +1202,26 @@ def admin_create_businessunit():
     naam = (request.form.get('naam') or '').strip()
     if not naam:
         flash('Naam van businessunit is verplicht', 'error')
-        return redirect(url_for('main.admin_dashboard'))
+        return redirect(url_for('main.admin_businessunits_page'))
     try:
         # voorkom dubbele insert: check bestaat
         existing = supabase.table("businessunit").select("businessunit_id").eq("naam", naam).execute()
         check_supabase_response(existing, "check bestaande businessunit")
         if existing.data:
             flash('Businessunit bestaat al', 'info')
-            return redirect(url_for('main.admin_dashboard'))
-        resp = supabase.table("businessunit").insert({"naam": naam}).execute()
+            return redirect(url_for('main.admin_businessunits_page'))
+
+        # Sommige Supabase-tabellen missen auto-increment op businessunit_id; kies dan handmatig een volgende id
+        next_id = 1
+        try:
+            max_resp = supabase.table("businessunit").select("businessunit_id").order("businessunit_id", desc=True).limit(1).execute()
+            check_supabase_response(max_resp, "fetch max businessunit_id")
+            if max_resp.data and max_resp.data[0].get('businessunit_id') is not None:
+                next_id = int(max_resp.data[0].get('businessunit_id')) + 1
+        except Exception as e:
+            print(f"Warning: kon max businessunit_id niet bepalen: {e}")
+
+        resp = supabase.table("businessunit").insert({"businessunit_id": next_id, "naam": naam}).execute()
         check_supabase_response(resp, "create businessunit")
         if getattr(resp, "error", None):
             msg = resp.error.message if hasattr(resp.error, "message") else str(resp.error)
@@ -1205,8 +1230,35 @@ def admin_create_businessunit():
             flash('Businessunit toegevoegd', 'success')
     except Exception as e:
         print(f"admin_create_businessunit error: {e}")
-        flash('Fout bij toevoegen businessunit', 'error')
-    return redirect(url_for('main.admin_dashboard'))
+        flash(f'Fout bij toevoegen businessunit: {e}', 'error')
+    return redirect(url_for('main.admin_businessunits_page'))
+
+@main.route('/admin/businessunit/<int:businessunit_id>/delete', methods=['POST'])
+def admin_delete_businessunit(businessunit_id):
+    if 'user_id' not in session or normalized_role() != 'Admin':
+        flash('Toegang geweigerd', 'error')
+        return redirect(url_for('main.login'))
+    try:
+        # Voorkom verwijderen als businessunit nog gekoppeld is
+        users_check = supabase.table("gebruiker").select("gebruiker_id").eq("businessunit_id", businessunit_id).limit(1).execute()
+        check_supabase_response(users_check, "check businessunit in gebruik door gebruikers")
+        if users_check.data:
+            flash('Kan businessunit niet verwijderen: deze is gekoppeld aan een gebruiker.', 'error')
+            return redirect(url_for('main.admin_businessunits_page'))
+
+        klachten_check = supabase.table("klacht").select("klacht_id").eq("businessunit_id", businessunit_id).limit(1).execute()
+        check_supabase_response(klachten_check, "check businessunit in gebruik door klachten")
+        if klachten_check.data:
+            flash('Kan businessunit niet verwijderen: verwijder eerst alle klachten die aan deze businessunit gekoppeld zijn.', 'error')
+            return redirect(url_for('main.admin_businessunits_page'))
+
+        del_resp = supabase.table("businessunit").delete().eq("businessunit_id", businessunit_id).execute()
+        check_supabase_response(del_resp, "delete businessunit")
+        flash('Businessunit verwijderd', 'success')
+    except Exception as e:
+        print(f"admin_delete_businessunit error: {e}")
+        flash('Fout bij verwijderen businessunit', 'error')
+    return redirect(url_for('main.admin_businessunits_page'))
 
 @main.route('/keyuser/klacht/<int:klacht_id>/toewijzen', methods=['POST'])
 def keyuser_assign_klacht(klacht_id):
@@ -1228,19 +1280,13 @@ def keyuser_assign_klacht(klacht_id):
 
         nieuwe_rep = request.form.get('vertegenwoordiger_id')
         if not nieuwe_rep:
-            flash('Geen verantwoordelijke geselecteerd', 'error')
+            flash('Geen gebruiker geselecteerd', 'error')
             return redirect(url_for('main.klacht_details', klacht_id=klacht_id))
 
         # Check whether the selected user exists
         new_rep_resp = supabase.table("gebruiker").select("*").eq("gebruiker_id", int(nieuwe_rep)).execute()
         if not new_rep_resp.data:
-            flash('Gekozen verantwoordelijke niet gevonden', 'error')
-            return redirect(url_for('main.klacht_details', klacht_id=klacht_id))
-        new_rep = new_rep_resp.data[0]
-
-        # Ensure target has role 'User' (verantwoordelijke)
-        if new_rep.get('rol') != 'User':
-            flash('Selecteer een verantwoordelijke (User)', 'error')
+            flash('Gekozen gebruiker niet gevonden', 'error')
             return redirect(url_for('main.klacht_details', klacht_id=klacht_id))
 
         # perform the update - Key user can assign across companies

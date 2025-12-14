@@ -1,0 +1,118 @@
+body.page-admin-businessunits {
+    color: white;
+    padding: 20px;
+}
+
+body.page-admin-businessunits .container {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+body.page-admin-businessunits .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+}
+
+body.page-admin-businessunits .btn {
+    background: #15803d;
+    color: white;
+    border: none;
+    outline: none;
+    border-radius: 10px;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    letter-spacing: 0.1px;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.18);
+    height: 44px;
+    padding: 0 16px;
+    transition: transform 120ms ease, box-shadow 120ms ease, background 160ms ease;
+}
+
+body.page-admin-businessunits .btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    background: #0f6a34;
+}
+
+body.page-admin-businessunits .card {
+    background: white;
+    color: #1f2937;
+    border-radius: 12px;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.14);
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+body.page-admin-businessunits label {
+    font-weight: 600;
+    font-size: 13px;
+}
+
+body.page-admin-businessunits input {
+    padding: 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+body.page-admin-businessunits .form-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+    align-items: center;
+    margin-top: 8px;
+}
+
+body.page-admin-businessunits .bu-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+    background: white;
+    color: #1f2937;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+}
+
+body.page-admin-businessunits .bu-table th,
+body.page-admin-businessunits .bu-table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid #e5e7eb;
+    text-align: left;
+}
+
+body.page-admin-businessunits .bu-table th {
+    background: #10b981;
+    color: white;
+}
+
+body.page-admin-businessunits .small-btn {
+    background: #dc2626;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+}
+
+body.page-admin-businessunits .small-btn:hover {
+    background: #b91c1c;
+}
+
+body.page-admin-businessunits .empty-state {
+    color: #6b7280;
+    font-size: 14px;
+}
+
+body.page-admin-businessunits .flash-messages {
+    margin-bottom: 16px;
+}

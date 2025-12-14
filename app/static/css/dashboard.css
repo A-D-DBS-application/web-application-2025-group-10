@@ -31,6 +31,7 @@ body.page-dashboard {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
     gap: 20px;
+    grid-auto-rows: minmax(200px, 1fr);
 }
 .dashboard-grid--user {
     grid-template-columns: 1fr;
@@ -52,7 +53,8 @@ body.page-dashboard {
     flex-direction: column;
     gap: 10px;
     text-decoration: none;
-    min-height: 180px;
+    min-height: 200px;
+    height: 100%;
     transition: transform 140ms ease, box-shadow 140ms ease, background 160ms ease, color 160ms ease;
     border: 1px solid #e5e7eb;
     align-items: center;
@@ -106,7 +108,8 @@ body.page-dashboard {
     padding: 28px;
     border-radius: 12px;
     box-shadow: 0 6px 16px rgba(0,0,0,0.14);
-    min-height: 180px;
+    min-height: 200px;
+    height: 100%;
     display: flex;
     flex-direction: column;
     justify-content: center;
