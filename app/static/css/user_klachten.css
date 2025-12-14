@@ -21,6 +21,23 @@ body.page-user-klachten .header h1 { margin: 0; }
 
 body.page-user-klachten .filters { display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; margin-bottom:12px; }
 body.page-user-klachten .filter-field { display:flex; flex-direction:column; gap:4px; color:#fff; font-size:12px; min-width:130px; }
+body.page-user-klachten .col-sort-prio { min-width: 160px; }
+body.page-user-klachten .filter-card {
+    background: white;
+    color: #1f2937;
+    padding: 0 12px;
+    border-radius: 8px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    min-width: 160px; /* align size with sortering box */
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 40px; /* match height of other inputs */
+    width: 100%; /* stretch to full column width */
+}
+body.page-user-klachten .filter-card .form-check-input { width: 14px; height: 14px; }
 body.page-user-klachten .filter-field input,
 body.page-user-klachten .filter-field select {
     padding: 10px 12px;
