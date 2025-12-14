@@ -553,8 +553,9 @@ def user_klachten():
         date_to = request.args.get('date_to')
         businessunit_filter = (request.args.get('businessunit') or '').strip()
         verantwoordelijke_naam = (request.args.get('verantwoordelijke_naam') or request.args.get('vertegenwoordiger_naam') or '').strip()
+        high_priority = (request.args.get('high_priority') or '').lower() in ('true', '1', 'on')
         filters_applied = any([
-            klant_id, klant_naam, categorie_id, status, date_from, date_to, businessunit_filter, verantwoordelijke_naam
+            klant_id, klant_naam, categorie_id, status, date_from, date_to, businessunit_filter, verantwoordelijke_naam, high_priority
         ])
 
         if klant_id:
@@ -589,6 +590,10 @@ def user_klachten():
 
         if businessunit_filter and role != 'Key user':
             klachten = [k for k in klachten if get_bu_value(k) == businessunit_filter.strip()]
+
+        # Prioriteitsfilter wordt pas na de andere filters toegepast
+        if high_priority:
+            klachten = [k for k in klachten if k.get('prioriteit')]
 
         # Sorteer na het toepassen van filters op datum_melding; default nieuwste eerst.
         def to_date(val):
@@ -632,13 +637,14 @@ def user_klachten():
                                businessunits=businessunits_used,
                                vertegenwoordigers=reps_for_filter,
                                filters_applied=filters_applied,
-                               sort_order=sort_order)
+                               sort_order=sort_order,
+                               high_priority=high_priority)
     except Exception as e:
         print(f"Exception in user_klachten: {e}")
         traceback.print_exc()
         flash('Er ging iets mis bij het ophalen van klachten', 'error')
         # Return with empty lists so template can still render
-        return render_template('user_klachten.html', klachten=[], categorieen=[], klanten=[], vertegenwoordigers=[], filters_applied=False, sort_order=request.args.get('sort_order', 'nieuwste'))
+        return render_template('user_klachten.html', klachten=[], categorieen=[], klanten=[], vertegenwoordigers=[], filters_applied=False, sort_order=request.args.get('sort_order', 'nieuwste'), high_priority=False)
 
 
 @main.route('/user/klacht/<int:klacht_id>/details')
