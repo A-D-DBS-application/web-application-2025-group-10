@@ -79,9 +79,9 @@
                 <option value="oudste" {% if (request.args.get('sort_order') or sort_order or 'nieuwste') == 'oudste' %}selected{% endif %}>Oudste eerst</option>
             </select>
         </div>
-        <div class="filter-field" style="min-width:160px; display:flex; align-items:center; gap:8px; padding-top:24px;">
-            <input type="checkbox" id="high_priority" name="high_priority" value="true" {% if (request.args.get('high_priority') or high_priority) %}checked{% endif %}>
-            <label for="high_priority" style="margin:0;">Hoge prioriteit eerst</label>
+        <div class="filter-field form-check d-flex flex-row align-items-center gap-2 flex-nowrap" style="min-width:160px;">
+            <input class="form-check-input" type="checkbox" id="high_priority" name="high_priority" value="true" {% if (request.args.get('high_priority') or high_priority) %}checked{% endif %}>
+            <label class="form-check-label mb-0" for="high_priority">Hoge prioriteit</label>
         </div>
         <div class="filter-field compact-btn" style="min-width:auto; margin-left:auto;">
             <button type="submit" class="action-link" style="padding:10px 16px; white-space:nowrap;">Filter</button>
