@@ -57,11 +57,9 @@
             <label for="status">Status</label>
             <select name="status" id="status">
                 <option value="">Alle statussen</option>
-                <option value="Ingediend" {% if request.args.get('status') == 'Ingediend' %}selected{% endif %}>Ingediend</option>
-                <option value="Goedgekeurd" {% if request.args.get('status') == 'Goedgekeurd' %}selected{% endif %}>Goedgekeurd</option>
-                <option value="Afgewezen" {% if request.args.get('status') == 'Afgewezen' %}selected{% endif %}>Afgewezen</option>
-                <option value="In behandeling" {% if request.args.get('status') == 'In behandeling' %}selected{% endif %}>In behandeling</option>
-                <option value="Afgehandeld" {% if request.args.get('status') == 'Afgehandeld' %}selected{% endif %}>Afgehandeld</option>
+                {% for status in status_options %}
+                    <option value="{{ status }}" {% if request.args.get('status') == status %}selected{% endif %}>{{ status }}</option>
+                {% endfor %}
             </select>
         </div>
         <div class="filter-field" style="min-width:140px;">

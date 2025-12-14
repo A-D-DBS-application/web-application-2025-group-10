@@ -21,6 +21,7 @@ from .category_suggester import (
     suggest_probleemcategorie,
     suggest_probleemcategorie_contextual_sqlalchemy,
 )
+from .models import Businessunit, Probleemcategorie, db, klacht_status_enum
 
 main = Blueprint('main', __name__)
 
@@ -35,16 +36,6 @@ BUCKET_NAME = "bijlages"
 # Toggle: bestanden in DB opslaan i.p.v. Storage (let op: base64 in DB kan groot worden)
 # Dit staat nu permanent op False, Base64/DB-opslag is uit de functies verwijderd.
 STORE_FILES_IN_DB = False  # alleen Storage gebruiken
-
-# Beschikbare businessunits (Productiebedrijf)
-BUSINESSUNITS = [
-    "Vanca",
-    "Vanca Group",
-    "Placabois",
-    "IWP",
-    "Forma",
-    "Lamitrans",
-]
 
 
 @main.route('/')
@@ -301,16 +292,78 @@ def check_supabase_response(resp, ctx=""):
         raise Exception(f"Supabase error in {ctx}: {msg}")
     return resp
 
-# Helper: fetch businessunit-namen vanuit Supabase (fallback op constante lijst)
+# Helper: fetch businessunit-namen via SQLAlchemy (fallback Supabase)
 def get_businessunits_list():
+    try:
+        rows = db.session.query(Businessunit.naam).order_by(Businessunit.naam).all()
+        names = [r[0] for r in rows if r and r[0]]
+        if names:
+            return names
+    except Exception as e:
+        print(f"Warning: kon businessunits niet ophalen via SQLAlchemy: {e}")
     try:
         resp = supabase.table("businessunit").select("naam").order("naam").execute()
         check_supabase_response(resp, "fetch businessunits list")
         names = [b.get('naam') for b in (resp.data or []) if b.get('naam')]
-        return names if names else BUSINESSUNITS
+        return names
     except Exception as e:
         print(f"Warning: kon businessunits niet ophalen: {e}")
-        return BUSINESSUNITS
+        return []
+
+
+def get_categorieen_list():
+    """Haal categorie_id + type op (SQLAlchemy met Supabase-fallback)."""
+    try:
+        rows = (
+            db.session.query(Probleemcategorie.categorie_id, Probleemcategorie.type)
+            .order_by(Probleemcategorie.type)
+            .all()
+        )
+        cats = [
+            {"categorie_id": cid, "type": ctype}
+            for cid, ctype in rows
+            if cid is not None and ctype is not None
+        ]
+        if cats:
+            return cats
+    except Exception as e:
+        print(f"Warning: kon categorieën niet ophalen via SQLAlchemy: {e}")
+    try:
+        resp = supabase.table("probleemcategorie").select("categorie_id, type").order("type").execute()
+        check_supabase_response(resp, "fetching probleemcategorie")
+        return resp.data if resp.data else []
+    except Exception as e:
+        print(f"Warning: kon categorieën niet ophalen via Supabase: {e}")
+        return []
+
+
+def get_status_options():
+    """Alle mogelijke statuswaarden vanuit het model ENUM."""
+    try:
+        return list(klacht_status_enum.enums)
+    except Exception as e:
+        print(f"Warning: kon status opties niet ophalen: {e}")
+        return []
+
+
+def suggest_categorie_safe(omschrijving, oorzaak, businessunit_id=None):
+    """
+    Probeer de contextuele suggestie (ORM) en val terug op de eenvoudige keyword-suggestie
+    als de database niet bereikbaar is.
+    """
+    omschrijving = (omschrijving or "").strip()
+    oorzaak = (oorzaak or "").strip()
+    if not omschrijving and not oorzaak:
+        return "Andere"
+    try:
+        return suggest_probleemcategorie_contextual_sqlalchemy(
+            omschrijving,
+            oorzaak,
+            businessunit_id=businessunit_id,
+        )
+    except Exception as e:
+        print(f"Warning: suggest_probleemcategorie_contextual_sqlalchemy faalde, fallback naar simpele suggestie: {e}")
+        return suggest_probleemcategorie(omschrijving, oorzaak)
 
 
 def find_categorie_id_by_type(categorieen, categorie_type):
@@ -611,21 +664,17 @@ def user_klachten():
 
         # Geen fallback naar alle klachten; leeg resultaat betekent geen matches voor de huidige filters.
 
-        # categorieen for filter options (simple select)
-        categorieen_resp = supabase.table("probleemcategorie").select("categorie_id, type").execute()
-        check_supabase_response(categorieen_resp, "fetching probleemcategorie")
-        categorieen = categorieen_resp.data if categorieen_resp.data else []
+        # categorieen for filter options (ORM + fallback)
+        categorieen = get_categorieen_list()
 
         klanten_resp = supabase.table("klant").select("klant_id, klantnaam").execute()
         check_supabase_response(klanten_resp, "fetching klanten")
         klanten = klanten_resp.data if klanten_resp.data else []
         klanten_map = {k['klant_id']: k.get('klantnaam') for k in klanten if k.get('klant_id') is not None}
 
-        # dynamic businessunits from table (fallback op constante)
-        bu_resp = supabase.table("businessunit").select("naam").execute()
-        check_supabase_response(bu_resp, "fetching businessunits for filter")
-        dynamic_bu = [b.get('naam') for b in (bu_resp.data or []) if b.get('naam')]
-        businessunits_used = dynamic_bu if dynamic_bu else BUSINESSUNITS
+        # dynamic businessunits from table
+        businessunits_used = get_businessunits_list()
+        status_options = get_status_options()
         # ensure klantnaam aanwezig
         for k in klachten:
             if not k.get('klant') and k.get('klant_id') in klanten_map:
@@ -636,6 +685,7 @@ def user_klachten():
                                categorieen=categorieen,
                                klanten=klanten,
                                businessunits=businessunits_used,
+                               status_options=status_options,
                                vertegenwoordigers=reps_for_filter,
                                filters_applied=filters_applied,
                                sort_order=sort_order,
@@ -645,7 +695,18 @@ def user_klachten():
         traceback.print_exc()
         flash('Er ging iets mis bij het ophalen van klachten', 'error')
         # Return with empty lists so template can still render
-        return render_template('user_klachten.html', klachten=[], categorieen=[], klanten=[], vertegenwoordigers=[], filters_applied=False, sort_order=request.args.get('sort_order', 'nieuwste'), high_priority=False)
+        return render_template(
+            'user_klachten.html',
+            klachten=[],
+            categorieen=[],
+            klanten=[],
+            businessunits=get_businessunits_list(),
+            status_options=get_status_options(),
+            vertegenwoordigers=[],
+            filters_applied=False,
+            sort_order=request.args.get('sort_order', 'nieuwste'),
+            high_priority=False
+        )
 
 
 @main.route('/user/klacht/<int:klacht_id>/details')
@@ -678,13 +739,7 @@ def klacht_details(klacht_id):
             statushistoriek = []
 
         # categorieen (for edit dropdown)
-        try:
-            categorieen_response = supabase.table("probleemcategorie").select("categorie_id, type").execute()
-            check_supabase_response(categorieen_response, "fetching categories")
-            categorieen = categorieen_response.data if categorieen_response.data else []
-        except Exception as e:
-            print(f"Warning: could not fetch categorieen: {e}")
-            categorieen = []
+        categorieen = get_categorieen_list()
 
         # vertegenw if manager/key user
         vertegenw = []
@@ -714,7 +769,16 @@ def klacht_details(klacht_id):
             except Exception as e:
                 print(f"Warning: could not fetch creator name for klacht {klacht_id}: {e}")
 
-        return render_template('klacht_details.html', klacht=klacht_data, klacht_id=klacht_id, categorieen=categorieen, statushistoriek=statushistoriek, vertegenw=vertegenw, businessunits=get_businessunits_list())
+        return render_template(
+            'klacht_details.html',
+            klacht=klacht_data,
+            klacht_id=klacht_id,
+            categorieen=categorieen,
+            statushistoriek=statushistoriek,
+            vertegenw=vertegenw,
+            businessunits=get_businessunits_list(),
+            status_options=get_status_options()
+        )
     except Exception as e:
         print(f"Exception in klacht_details: {e}")
         traceback.print_exc()
@@ -802,10 +866,8 @@ def klacht_aanmaken():
     # Haal klanten en categorieën op voor dropdowns
     try:
         klanten_response = supabase.table("klant").select("klant_id, klantnaam").execute()
-        categorieen_response = supabase.table("probleemcategorie").select("categorie_id, type").execute()
-        
         klanten = klanten_response.data if klanten_response.data else []
-        categorieen = categorieen_response.data if categorieen_response.data else []
+        categorieen = get_categorieen_list()
         
     except Exception as e:
         print(f"Error bij ophalen data: {e}")
@@ -813,7 +875,7 @@ def klacht_aanmaken():
         categorieen = []
 
     bu_prefill = safe_int(session.get('businessunit_id'))
-    suggested_categorie_type = suggest_probleemcategorie_contextual_sqlalchemy(
+    suggested_categorie_type = suggest_categorie_safe(
         request.form.get('reden_afwijzing', '').strip(),
         request.form.get('mogelijke_oorzaak', '').strip(),
         businessunit_id=bu_prefill if isinstance(bu_prefill, int) else None
@@ -843,7 +905,7 @@ def klacht_aanmaken():
             print(f"  Aantal eenheden: {aantal_eenheden}")
             print(f"  Businessunit: {businessunit}")
 
-            suggested_categorie_type = suggest_probleemcategorie_contextual_sqlalchemy(
+            suggested_categorie_type = suggest_categorie_safe(
                 klacht_omschrijving,
                 mogelijke_oorzaak,
                 businessunit_id=safe_int(bu_id) if bu_id is not None else None
@@ -1030,20 +1092,19 @@ def klacht_aanmaken():
 def suggest_categorie():
     if 'user_id' not in session or normalized_role() not in ('User', 'Key user', 'Admin'):
         return {"error": "Unauthorized"}, 401
-    data = request.get_json(silent=True) or {}
-    klacht_omschrijving = (data.get('klacht_omschrijving') or '').strip()
-    mogelijke_oorzaak = (data.get('mogelijke_oorzaak') or '').strip()
+    klacht_omschrijving = (request.form.get('klacht_omschrijving') or '').strip()
+    mogelijke_oorzaak = (request.form.get('mogelijke_oorzaak') or '').strip()
     businessunit_context = (
-        data.get('businessunit_id')
-        or data.get('businessunit')
+        request.form.get('businessunit_id')
+        or request.form.get('businessunit')
         or session.get('businessunit_id')
     )
-    suggested_type = suggest_probleemcategorie_contextual_sqlalchemy(
+    suggested_type = suggest_categorie_safe(
         klacht_omschrijving,
         mogelijke_oorzaak,
         businessunit_id=safe_int(businessunit_context) if businessunit_context is not None else None
     )
-    return {"suggested_type": suggested_type}, 200
+    return suggested_type or "Andere", 200, {"Content-Type": "text/plain"}
 
 
 @main.route('/admin/dashboard')
@@ -1520,9 +1581,20 @@ def klacht_bewerken(klacht_id):
             flash('Categorie, ordernummer, artikelnummer, aantal eenheden en klacht omschrijving zijn verplicht', 'error')
             return redirect(url_for('main.klacht_details', klacht_id=klacht_id))
 
-        # Controleer of categorie_id bestaat
-        categorie_check = supabase.table("probleemcategorie").select("categorie_id").eq("categorie_id", int(categorie_id)).execute()
-        if not categorie_check.data:
+        # Controleer of categorie_id bestaat (ORM met fallback)
+        categorie_check = None
+        try:
+            categorie_check = db.session.query(Probleemcategorie.categorie_id).filter_by(categorie_id=int(categorie_id)).first()
+        except Exception as e:
+            print(f"Warning: categorie check via ORM faalde: {e}")
+            try:
+                resp = supabase.table("probleemcategorie").select("categorie_id").eq("categorie_id", int(categorie_id)).execute()
+                check_supabase_response(resp, "categorie check fallback supabase")
+                if resp.data:
+                    categorie_check = True
+            except Exception as e2:
+                print(f"Warning: categorie check fallback faalde: {e2}")
+        if not categorie_check:
             flash('Ongeldige categorie geselecteerd', 'error')
             return redirect(url_for('main.klacht_details', klacht_id=klacht_id))
 
@@ -1782,11 +1854,9 @@ def klachten_export():
             print(f"Warning export: could not load klanten map: {em}")
         categorie_map = {}
         try:
-            cmap_resp = supabase.table("probleemcategorie").select("categorie_id, type").execute()
-            check_supabase_response(cmap_resp, "export: fetch categorie map")
-            for r in cmap_resp.data or []:
-                if r.get('categorie_id') is not None:
-                    categorie_map[int(r['categorie_id'])] = r.get('type') or ''
+            for cat in get_categorieen_list():
+                if cat.get('categorie_id') is not None:
+                    categorie_map[int(cat['categorie_id'])] = cat.get('type') or ''
         except Exception as cm:
             print(f"Warning export: could not load categorie map: {cm}")
 

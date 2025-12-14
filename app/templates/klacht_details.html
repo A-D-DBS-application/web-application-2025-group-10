@@ -125,10 +125,9 @@
                     <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                         <select name="status" class="edit-select" id="status_select">
                             <option value="">Wijzig status</option>
-                            <option value="Ingediend">Ingediend</option>
-                            <option value="In behandeling">In behandeling</option>
-                            <option value="Afgehandeld">Afgehandeld</option>
-                            <option value="Afgewezen">Afgewezen</option>
+                            {% for status in status_options %}
+                                <option value="{{ status }}">{{ status }}</option>
+                            {% endfor %}
                         </select>
                         <label style="display:flex;align-items:center;gap:6px;">
                             <input type="checkbox" name="prioriteit" {% if klacht.prioriteit %}checked{% endif %}> Prioriteit
