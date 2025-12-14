@@ -448,6 +448,7 @@ def user_klachten():
         return redirect(url_for('main.login'))
 
     role = normalized_role()
+    sort_order = request.args.get('sort_order', 'nieuwste')
     try:
         # helper om missende kolom uit Supabase foutboodschap te halen
         def parse_missing_column(errmsg):
@@ -459,7 +460,9 @@ def user_klachten():
         klachten_raw = []
         # Try to select with relational joins so fewer server calls are required (incl. verantwoordelijke en businessunit naam)
         try:
-            query = supabase.table("klacht").select("*, klant:klant_id(klantnaam), categorie:probleemcategorie(type), verantwoordelijke:verantwoordelijke_id(naam), businessunit_ref:businessunit_id(naam)").order("datum_melding", {"ascending": False})
+            sort_ascending = True if sort_order == 'oudste' else False  # standaard: nieuwste eerst (desc)
+
+            query = supabase.table("klacht").select("*, klant:klant_id(klantnaam), categorie:probleemcategorie(type), verantwoordelijke:verantwoordelijke_id(naam), businessunit_ref:businessunit_id(naam)").order("datum_melding", {"ascending": sort_ascending})
             # if User: only their own klachten
             if role == 'User':
                 user_id_int = safe_int(session['user_id'])
@@ -550,6 +553,9 @@ def user_klachten():
         date_to = request.args.get('date_to')
         businessunit_filter = (request.args.get('businessunit') or '').strip()
         verantwoordelijke_naam = (request.args.get('verantwoordelijke_naam') or request.args.get('vertegenwoordiger_naam') or '').strip()
+        filters_applied = any([
+            klant_id, klant_naam, categorie_id, status, date_from, date_to, businessunit_filter, verantwoordelijke_naam
+        ])
 
         if klant_id:
             klachten = [k for k in klachten if str(k.get('klant_id')) == str(klant_id)]
@@ -584,15 +590,20 @@ def user_klachten():
         if businessunit_filter and role != 'Key user':
             klachten = [k for k in klachten if get_bu_value(k) == businessunit_filter.strip()]
 
-        # Als er niets terugkomt, probeer nog één keer een kale select zonder filters
-        if not klachten:
+        # Sorteer na het toepassen van filters op datum_melding; default nieuwste eerst.
+        def to_date(val):
             try:
-                resp_all = supabase.table("klacht").select("*").execute()
-                check_supabase_response(resp_all, "fallback: fetch all klachten on empty result")
-                klachten = resp_all.data if resp_all.data else []
-            except Exception as e_all:
-                print(f"Warning: fallback all complaints failed: {e_all}")
-                klachten = []
+                return datetime.fromisoformat(str(val)[:10])
+            except Exception:
+                return datetime.min
+
+        klachten = sorted(
+            klachten,
+            key=lambda k: to_date(k.get('datum_melding')),
+            reverse=(sort_order != 'oudste')
+        )
+
+        # Geen fallback naar alle klachten; leeg resultaat betekent geen matches voor de huidige filters.
 
         # categorieen for filter options (simple select)
         categorieen_resp = supabase.table("probleemcategorie").select("categorie_id, type").execute()
@@ -619,13 +630,15 @@ def user_klachten():
                                categorieen=categorieen,
                                klanten=klanten,
                                businessunits=businessunits_used,
-                               vertegenwoordigers=reps_for_filter)
+                               vertegenwoordigers=reps_for_filter,
+                               filters_applied=filters_applied,
+                               sort_order=sort_order)
     except Exception as e:
         print(f"Exception in user_klachten: {e}")
         traceback.print_exc()
         flash('Er ging iets mis bij het ophalen van klachten', 'error')
         # Return with empty lists so template can still render
-        return render_template('user_klachten.html', klachten=[], categorieen=[], klanten=[], vertegenwoordigers=[])
+        return render_template('user_klachten.html', klachten=[], categorieen=[], klanten=[], vertegenwoordigers=[], filters_applied=False, sort_order=request.args.get('sort_order', 'nieuwste'))
 
 
 @main.route('/user/klacht/<int:klacht_id>/details')

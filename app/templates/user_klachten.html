@@ -72,6 +72,13 @@
             <label for="date_to">Einddatum</label>
             <input type="date" id="date_to" name="date_to" value="{{ request.args.get('date_to') or '' }}">
         </div>
+        <div class="filter-field" style="min-width:160px;">
+            <label for="sort_order">Sortering</label>
+            <select id="sort_order" name="sort_order">
+                <option value="nieuwste" {% if (request.args.get('sort_order') or sort_order or 'nieuwste') == 'nieuwste' %}selected{% endif %}>Nieuwste eerst</option>
+                <option value="oudste" {% if (request.args.get('sort_order') or sort_order or 'nieuwste') == 'oudste' %}selected{% endif %}>Oudste eerst</option>
+            </select>
+        </div>
         <div class="filter-field compact-btn" style="min-width:auto; margin-left:auto;">
             <button type="submit" class="action-link" style="padding:10px 16px; white-space:nowrap;">Filter</button>
         </div>
@@ -150,6 +157,10 @@
                 {% endfor %}
             </tbody>
         </table>
+    {% elif filters_applied %}
+        <div class="no-klachten">
+            <h3>Geen klachten gevonden voor deze filter</h3>
+        </div>
     {% else %}
         <div class="no-klachten">
             <h3>Nog geen klachten</h3>

@@ -60,21 +60,6 @@
                         <input type="text" name="ondernemingsnummer" id="ondernemingsnummer" placeholder="Ondernemingsnummer" value="{{ request.form.get('ondernemingsnummer','') }}" required>
                     </div>
 
-                    <div class="form-group">
-                        <label for="categorie_id" class="required">Probleemcategorie</label>
-                        <div class="text-muted" style="font-size: 0.9rem; margin-bottom: 4px;">
-                            Voorgestelde categorie: <strong id="suggestedCategorieLabel">{{ suggested_categorie_type or 'Andere' }}</strong>
-                        </div>
-                        <select name="categorie_id" id="categorie_id" required>
-                            <option value="">Selecteer een categorie</option>
-                            {% for categorie in categorieen %}
-                                <option value="{{ categorie.categorie_id }}" {% if selected_categorie_id and selected_categorie_id|int == categorie.categorie_id %}selected{% endif %}>
-                                    {{ categorie.type }}
-                                </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-
                     <div class="form-group full-width">
                         <label for="order_nummer" class="required">Ordernummer</label>
                         <input type="text" name="order_nummer" id="order_nummer" value="{{ request.form.get('order_nummer','') }}" required placeholder="Voer ordernummer in">
@@ -98,6 +83,21 @@
                     <div class="form-group full-width">
                         <label for="reden_afwijzing" class="required">Klacht omschrijving</label>
                         <textarea name="reden_afwijzing" id="reden_afwijzing" required placeholder="Omschrijf de klacht">{{ request.form.get('reden_afwijzing','') }}</textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="categorie_id" class="required">Probleemcategorie</label>
+                        <div class="text-muted" style="font-size: 0.9rem; margin-bottom: 4px;">
+                            Voorgestelde categorie: <strong id="suggestedCategorieLabel">{{ suggested_categorie_type or 'Andere' }}</strong>
+                        </div>
+                        <select name="categorie_id" id="categorie_id" required>
+                            <option value="">Selecteer een categorie</option>
+                            {% for categorie in categorieen %}
+                                <option value="{{ categorie.categorie_id }}" {% if selected_categorie_id and selected_categorie_id|int == categorie.categorie_id %}selected{% endif %}>
+                                    {{ categorie.type }}
+                                </option>
+                            {% endfor %}
+                        </select>
                     </div>
 
                     <div class="form-group full-width">
