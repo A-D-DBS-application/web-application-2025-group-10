@@ -19,8 +19,11 @@ class Businessunit(db.Model):
     __tablename__ = 'businessunit'
     businessunit_id = db.Column(db.BigInteger, primary_key=True)
     naam = db.Column(db.String(255), nullable=False)
-    adres = db.Column(db.String(255))
-    contactpersoon = db.Column(db.String(255))
+
+    def __repr__(self):
+        return f"<Businessunit(id={self.businessunit_id}, naam='{self.naam}')>"
+
+    
 
     # Relatie naar vertegenwoordigers die bij deze businessunit horen
     vertegenwoordigers = db.relationship('Gebruiker', backref='businessunit', lazy=True)
@@ -34,6 +37,9 @@ class Gebruiker(db.Model):
     wachtwoord = db.Column(db.Text, nullable=False)
     telefoon = telefoon = db.Column(db.Text)
     businessunit_id = db.Column(db.BigInteger, db.ForeignKey('businessunit.businessunit_id', onupdate='CASCADE'))
+    
+    def __repr__(self):
+        return f"<Gebruiker(id={self.gebruiker_id}, naam='{self.naam}', email='{self.email}')>"
 
 
     # Relatie naar statushistoriek die door deze gebruiker is gewijzigd
@@ -52,6 +58,9 @@ class Klant(db.Model):
     adres = db.Column(db.Text)
     ondernemingsnummer = db.Column(db.BigInteger)
 
+    def __repr__(self):
+        return f"<Klant(id={self.klant_id}, naam='{self.klantnaam}')>"
+
     # Relaties naar orders en klachten
     orders = db.relationship('Order', backref='klant', lazy=True)
     klachten = db.relationship('Klacht', backref='klant', lazy=True)
@@ -61,6 +70,9 @@ class Order(db.Model):
     order_nummer = db.Column(db.String(255), primary_key=True)
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=datetime.utcnow)
     klant_id = db.Column(db.Integer, db.ForeignKey('klant.klant_id'))
+
+    def __repr__(self):
+        return f"<Order(nummer='{self.order_nummer}', klant_id={self.klant_id})>"
 
     producten = db.relationship('Product', secondary='producten_order',backref=db.backref('orders_via_m2m', lazy='dynamic'),lazy='dynamic')
 
@@ -108,6 +120,9 @@ class Product(db.Model):
     __tablename__ = 'product'
     artikel_nr = db.Column(db.BigInteger, primary_key=True)
     naam = db.Column(db.String(255), nullable=False)
+
+    def __repr__(self):
+        return f"<Product(artikel_nr={self.artikel_nr}, naam='{self.naam}')>"
 
     orders = db.relationship('Order', secondary='producten_order', backref=db.backref('producten_via_m2m', lazy='dynamic'),lazy='dynamic')
 
