@@ -17,7 +17,10 @@ from openpyxl import Workbook
 from openpyxl.drawing.image import Image as XLImage
 from openpyxl.worksheet.table import Table, TableStyleInfo
 import re
-from .category_suggester import suggest_probleemcategorie
+from .category_suggester import (
+    suggest_probleemcategorie,
+    suggest_probleemcategorie_contextual_sqlalchemy,
+)
 
 main = Blueprint('main', __name__)
 
@@ -599,16 +602,10 @@ def user_klachten():
         if high_priority:
             klachten = [k for k in klachten if k.get('prioriteit')]
 
-        # Sorteer na het toepassen van filters op datum_melding; default nieuwste eerst.
-        def to_date(val):
-            try:
-                return datetime.fromisoformat(str(val)[:10])
-            except Exception:
-                return datetime.min
-
+        # Sorteer na het toepassen van filters op klacht_id (proxy voor exacte volgorde, omdat datum_melding geen tijd bevat).
         klachten = sorted(
             klachten,
-            key=lambda k: to_date(k.get('datum_melding')),
+            key=lambda k: safe_int(k.get('klacht_id')) or 0,
             reverse=(sort_order != 'oudste')
         )
 
@@ -815,9 +812,11 @@ def klacht_aanmaken():
         klanten = []
         categorieen = []
 
-    suggested_categorie_type = suggest_probleemcategorie(
+    bu_prefill = safe_int(session.get('businessunit_id'))
+    suggested_categorie_type = suggest_probleemcategorie_contextual_sqlalchemy(
         request.form.get('reden_afwijzing', '').strip(),
-        request.form.get('mogelijke_oorzaak', '').strip()
+        request.form.get('mogelijke_oorzaak', '').strip(),
+        businessunit_id=bu_prefill if isinstance(bu_prefill, int) else None
     )
     suggested_categorie_id = find_categorie_id_by_type(categorieen, suggested_categorie_type)
     selected_categorie_id = request.form.get('categorie_id', '').strip() or suggested_categorie_id
@@ -844,7 +843,11 @@ def klacht_aanmaken():
             print(f"  Aantal eenheden: {aantal_eenheden}")
             print(f"  Businessunit: {businessunit}")
 
-            suggested_categorie_type = suggest_probleemcategorie(klacht_omschrijving, mogelijke_oorzaak)
+            suggested_categorie_type = suggest_probleemcategorie_contextual_sqlalchemy(
+                klacht_omschrijving,
+                mogelijke_oorzaak,
+                businessunit_id=safe_int(bu_id) if bu_id is not None else None
+            )
             suggested_categorie_id = find_categorie_id_by_type(categorieen, suggested_categorie_type)
             if not categorie_id and suggested_categorie_id:
                 categorie_id = str(suggested_categorie_id)
@@ -1030,7 +1033,16 @@ def suggest_categorie():
     data = request.get_json(silent=True) or {}
     klacht_omschrijving = (data.get('klacht_omschrijving') or '').strip()
     mogelijke_oorzaak = (data.get('mogelijke_oorzaak') or '').strip()
-    suggested_type = suggest_probleemcategorie(klacht_omschrijving, mogelijke_oorzaak)
+    businessunit_context = (
+        data.get('businessunit_id')
+        or data.get('businessunit')
+        or session.get('businessunit_id')
+    )
+    suggested_type = suggest_probleemcategorie_contextual_sqlalchemy(
+        klacht_omschrijving,
+        mogelijke_oorzaak,
+        businessunit_id=safe_int(businessunit_context) if businessunit_context is not None else None
+    )
     return {"suggested_type": suggested_type}, 200
 
 
