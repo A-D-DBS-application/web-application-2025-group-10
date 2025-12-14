@@ -5,7 +5,7 @@ import os
 import smtplib
 from email.message import EmailMessage
 import base64
-import json
+# import json  <--- VERWIJDERD
 import uuid
 import traceback
 from datetime import datetime, date
@@ -30,7 +30,7 @@ supabase = create_client(supabase_url, supabase_key)
 BUCKET_NAME = "bijlages"
 
 # Toggle: bestanden in DB opslaan i.p.v. Storage (let op: base64 in DB kan groot worden)
-# Voor deze setup gebruiken we enkel Supabase Storage (geen base64 in DB)
+# Dit staat nu permanent op False, Base64/DB-opslag is uit de functies verwijderd.
 STORE_FILES_IN_DB = False  # alleen Storage gebruiken
 
 # Beschikbare businessunits (Productiebedrijf)
@@ -260,7 +260,7 @@ def fetch_image_bytes(url):
         return None
     try:
         if url.startswith('data:'):
-            # data URL: data:image/png;base64,...
+            # data URL: data:image/png;base64,... (LEGACY SUPPORT)
             if ';base64,' in url:
                 b64 = url.split(';base64,', 1)[1]
                 return base64.b64decode(b64)
@@ -346,55 +346,59 @@ def is_klacht_today(klacht, today_str=None):
     )
     return dm[:10] == today_str
 
-# Helpers to normalize bijlages stored as TEXT (JSON string) in Supabase
+# NIEUW: Normalizeert de DB-string van URL's naar de structuur die de template verwacht.
 def normalize_bijlages(raw_bijlages):
-    """Convert DB value (text with newline-separated urls or legacy json) to list of bijlage dicts."""
+    """
+    Converteert de opgeslagen waarde (TEXT met newline-gescheiden URL's)
+    naar een lijst van dicts voor de template, met LEGACY FALLBACK voor oude JSON/dicts.
+    """
     if not raw_bijlages:
         return []
-    try:
-        data = raw_bijlages
-        # Legacy JSON string fallback
-        if isinstance(data, str) and data.strip().startswith(("[", "{")):
-            try:
-                data = json.loads(data)
-            except Exception:
-                pass
+    
+    urls = []
+    
+    # 1. Behandel de moderne opgeslagen string (newline-gescheiden URL's)
+    if isinstance(raw_bijlages, str):
+        urls.extend([u.strip() for u in raw_bijlages.splitlines() if u.strip()])
+    
+    # 2. Behandel de oude opgeslagen Lijst-van-objects format (LEGACY FALLBACK)
+    elif isinstance(raw_bijlages, list):
+        for b in raw_bijlages:
+            if isinstance(b, dict) and b.get("url"):
+                urls.append(b["url"])
+            elif isinstance(b, str):
+                urls.append(b)
+                
+    # 3. Filter op unieke, geldige URL-strings en converteer naar template-dicts
+    normalized = []
+    unique_urls = set()
+    for url in urls:
+        if url in unique_urls:
+            continue
+        unique_urls.add(url)
+        
+        url_lower = url.lower()
+        # De is_image check is belangrijk voor de template en Excel export
+        is_img = url.startswith('data:image') or url_lower.endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp'))
+        
+        normalized.append({
+            "id": str(uuid.uuid4()),
+            "url": url,
+            "naam": url.split("/")[-1] if "/" in url else url,
+            "is_image": is_img
+        })
+        
+    return normalized
 
-        normalized = []
-        if isinstance(data, str):
-            candidates = [u for u in data.splitlines() if u.strip()]
-            for url in candidates:
-                normalized.append({
-                    "id": str(uuid.uuid4()),
-                    "url": url.strip(),
-                    "naam": url.strip().split("/")[-1] if "/" in url else url.strip(),
-                    "is_image": url.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp'))
-                })
-        elif isinstance(data, dict):
-            data = [data]
-        if isinstance(data, list):
-            for b in data:
-                b_copy = dict(b) if isinstance(b, dict) else {"url": b, "naam": str(b)}
-                if not b_copy.get('id'):
-                    b_copy['id'] = str(uuid.uuid4())
-                if b_copy.get('content') and not b_copy.get('url'):
-                    ct = b_copy.get('content_type', 'application/octet-stream')
-                    b_copy['url'] = f"data:{ct};base64,{b_copy.get('content')}"
-                content_type = (b_copy.get('content_type') or '')
-                url_lower = (b_copy.get('url') or '').lower()
-                b_copy['is_image'] = bool(content_type.startswith('image/') or url_lower.endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')))
-                normalized.append(b_copy)
-        return normalized
-    except Exception:
-        return []
-
+# NIEUW: Slaat de bijlages op als een newline-gescheiden string van URL's.
 def serialize_bijlages_for_db(bijlage_list):
-    """Store as newline-separated URLs (no JSON string)."""
+    """Sla op als newline-gescheiden URL's (eenvoudige TEXT-opslag)."""
     if not bijlage_list:
         return None
     try:
         urls = []
         for b in bijlage_list:
+            # We verwachten nu dat de items DICTS zijn (van upload_file_to_storage), maar zijn flexibel.
             if isinstance(b, dict) and b.get("url"):
                 urls.append(str(b["url"]))
             elif isinstance(b, str):
@@ -422,8 +426,6 @@ def normalize_klacht_row(row):
         k['klacht_omschrijving'] = k.get('reden_afwijzing')
     if 'opmerking_status_wijziging' in k and 'gm_opmerking' not in k:
         k['gm_opmerking'] = k.get('opmerking_status_wijziging')
-    # bijlages
-    k['bijlages'] = normalize_bijlages(k.get('bijlages'))
     # businessunit id + naam
     bu_id = k.get('businessunit_id')
     k['businessunit_id'] = bu_id
@@ -495,6 +497,8 @@ def user_klachten():
                 print(f"Warning: fallback select failed: {e2}")
                 klachten_raw = []
 
+        # Hier passen we normalize_klacht_row toe zonder bijlages te normaliseren,
+        # dit doen we later voor elke klacht om de loop te vermijden.
         klachten = [normalize_klacht_row(k) for k in klachten_raw]
 
         # Attach verantwoordelijke naam to each complaint (for filtering and display)
@@ -699,7 +703,9 @@ def klacht_details(klacht_id):
             except Exception as e:
                 print(f"Warning: could not fetch vertegenw: {e}")
                 vertegenw = []
-        klacht_data['bijlages'] = normalize_bijlages(klacht_data.get('bijlages'))
+        # BELANGRIJK: Bijlages omzetten van URL-string naar template-dict structuur
+        # Deze is al genormaliseerd in normalize_klacht_row, maar we roepen het hier opnieuw aan om zeker te zijn van de dicts
+        klacht_data['bijlages'] = normalize_bijlages(klacht_data.get('bijlages')) 
 
         # After we fetched klacht_data in klacht_details, ensure we have the creator name even if relation wasn't joined:
         if not klacht_data.get('verantwoordelijke') and klacht_data.get('verantwoordelijke_id'):
@@ -718,7 +724,7 @@ def klacht_details(klacht_id):
         flash('Er ging iets mis bij het ophalen van de klacht details', 'error')
         return redirect(url_for('main.user_klachten'))
 
-# Helper: upload one file to Supabase Storage OR store base64 in DB and return bijlage dict
+# Helper: upload one file to Supabase Storage and return bijlage dict (met URL)
 def upload_file_to_storage(file_obj, store_in_db=False):
     if not file_obj or not getattr(file_obj, 'filename', None):
         return None
@@ -734,20 +740,8 @@ def upload_file_to_storage(file_obj, store_in_db=False):
             pass
         file_bytes = file_obj.read()
 
-        if store_in_db:
-            # Store bytes as base64 inside bijlage JSON
-            b64 = base64.b64encode(file_bytes).decode('utf-8')
-            data_url = f"data:{content_type};base64,{b64}"
-            bijlage = {
-                "id": unique_id,
-                "naam": safe_name,
-                "content_type": content_type,
-                "content": b64,           # raw base64 stored in DB
-                "url": data_url,          # convenience for templates (data: URL)
-                "upload_date": datetime.utcnow().isoformat()
-            }
-            return bijlage
-        else:
+        # Dwing het gebruik van Supabase Storage af (STORE_FILES_IN_DB is False)
+        if not STORE_FILES_IN_DB:
             # Upload to Supabase Storage
             unique_name = f"{unique_id}_{safe_name}"
             path_in_bucket = f"klachten/{unique_name}"
@@ -761,6 +755,18 @@ def upload_file_to_storage(file_obj, store_in_db=False):
                 "upload_date": datetime.utcnow().isoformat()
             }
             return bijlage
+        else:
+             # Oude Base64/DB opslag - Hoort niet meer te lopen, maar defensief
+            b64 = base64.b64encode(file_bytes).decode('utf-8')
+            data_url = f"data:{content_type};base64,{b64}"
+            return {
+                "id": unique_id,
+                "naam": safe_name,
+                "content_type": content_type,
+                "content": b64,
+                "url": data_url,
+                "upload_date": datetime.utcnow().isoformat()
+            }
     except Exception as e:
         print(f"Upload error: {e}")
         traceback.print_exc()
@@ -883,7 +889,7 @@ def klacht_aanmaken():
                 except Exception as e:
                     print(f"Warning: kon ondernemingsnummer niet opslaan voor klant {klant_id}: {e}")
 
-            # ================== AANGESCHERPT: meerdere bestanden verwerken ==================
+            # ================== AANGESCHERPT: meerdere bestanden verwerken (Upload) ==================
             bijlages = []
             # Accept both 'bijlage' and 'bijlage[]' (some clients use bracketed names)
             files = []
@@ -892,23 +898,26 @@ def klacht_aanmaken():
             # Filter out empty file entries and deduplicate by filename+size
             seen_key = set()
             upload_count = 0
-            print(f"DEBUG - Received {len(files)} file objects (raw).")
             filtered_files = []
             for f in files:
                 if not f or not getattr(f, 'filename', None):
                     continue
-                key = (f.filename, getattr(f, 'content_length', None) or f.content_type)
+                # Simple check for empty file
+                f.stream.seek(0, os.SEEK_END)
+                size = f.stream.tell()
+                f.stream.seek(0)
+                if size == 0:
+                    continue
+                key = (f.filename, size)
                 if key in seen_key:
                     continue
                 seen_key.add(key)
                 filtered_files.append(f)
-            print(f"DEBUG - Filtered to {len(filtered_files)} unique files.")
-            # Safely upload each file
-            for f in files:
-                # keep loop over filtered list to ensure duplicates are not uploaded twice
-                pass
+            
+            # Safely upload each file and collect the dictionary (met URL)
             for f in filtered_files:
                 try:
+                    # upload_file_to_storage retourneert een dict met de URL
                     uploaded = upload_file_to_storage(f, store_in_db=STORE_FILES_IN_DB)
                     if uploaded:
                         bijlages.append(uploaded)
@@ -920,6 +929,7 @@ def klacht_aanmaken():
             if not bijlages:
                 bijlages = None
             print(f"DEBUG - Total uploaded bijlages: {len(bijlages) if bijlages else 0}")
+            # Gebruik de nieuwe helper die alleen de URL-strings uit de dicts haalt en deze als TEXT opslaat.
             serialized_bijlages = serialize_bijlages_for_db(bijlages)
             # ================== EINDE AANGESCHERPT ==================
 
@@ -935,7 +945,7 @@ def klacht_aanmaken():
                 'artikelnummer': safe_int(artikelnummer) if artikelnummer else None,
                 'aantal_eenheden': safe_int(aantal_eenheden) if aantal_eenheden else None,
                 'mogelijke_oorzaak': mogelijke_oorzaak or None,
-                'bijlages': serialized_bijlages,              # <--- hier komt de JSON in de tabel als TEXT
+                'bijlages': serialized_bijlages,              # <--- hier komt de newline-string van URL's (TEXT)
                 'prioriteit': False,
                 'status': 'Ingediend',
                 'datum_melding': vandaag,
@@ -987,8 +997,7 @@ def klacht_aanmaken():
                     notify_new_complaint(businessunit, nieuw_id)
                 except Exception as e:
                     print(f"Error sending new complaint notifications: {e}")
-                # Notify GM or Sales manager if needed
-                # Simple notification: find all users with role Admin/Key user in same bedrijf
+                
                 flash('Klacht succesvol aangemaakt!', 'success')
                 return redirect(url_for('main.user_klachten'))
             else:
@@ -1507,52 +1516,48 @@ def klacht_bewerken(klacht_id):
 
         # Haal bestaande klacht met bijlages
         klacht_get_resp = supabase.table("klacht").select("*").eq("klacht_id", klacht_id).execute()
-        existing_bijlages = []
+        existing_bijlages_raw = None
         klacht_row = {}
         if klacht_get_resp.data and len(klacht_get_resp.data) > 0:
             klacht_row = klacht_get_resp.data[0]
-            existing_bijlages = normalize_bijlages(klacht_row.get('bijlages'))
+            existing_bijlages_raw = klacht_row.get('bijlages')
             klant_id_existing = klacht_row.get('klant_id')
             if klant_id_existing and ondernemingsnummer:
                 try:
                     supabase.table("klant").update({"ondernemingsnummer": ondernemingsnummer}).eq("klant_id", int(klant_id_existing)).execute()
                 except Exception as e:
                     print(f"Warning: kon ondernemingsnummer niet opslaan voor klant {klant_id_existing}: {e}")
-        else:
-            existing_bijlages = []
-
-        # Defensive: zorg dat elke bestaande bijlage een id heeft
-        for bi, b in enumerate(existing_bijlages):
-            if isinstance(b, dict) and not b.get('id'):
-                existing_bijlages[bi] = {**b, 'id': str(uuid.uuid4())}
-            elif not isinstance(b, dict):
-                # unexpected format - skip or try convert
-                continue
+        
+        # Converteer opgeslagen string naar lijst van dicts voor bewerking
+        existing_bijlages = normalize_bijlages(existing_bijlages_raw)
 
         # 1) Verwijder aangevinkte bijlages
-        deleted_ids_csv = request.form.get('deleted_bijlages', '')
-        deleted_ids = [x for x in deleted_ids_csv.split(',') if x.strip()] if deleted_ids_csv else []
-        if deleted_ids:
-            # filter out bijlages whose 'id' is in deleted_ids
-            to_remove = [b for b in existing_bijlages if str(b.get('id')) in deleted_ids]
-            # Attempt delete from storage for each
-            for b in to_remove:
-                if b.get('url'):
-                    delete_file_from_storage(b.get('url'))
-            # Keep only those not deleted
-            existing_bijlages = [b for b in existing_bijlages if str(b.get('id')) not in deleted_ids]
+        # We verwachten een door komma's gescheiden lijst van URL-strings in 'deleted_bijlages' (via template JS)
+        deleted_urls_csv = request.form.get('deleted_bijlages', '')
+        deleted_urls = [x for x in deleted_urls_csv.split(',') if x.strip()] if deleted_urls_csv else []
+        
+        if deleted_urls:
+            # Delete the file from storage
+            for url in deleted_urls:
+                delete_file_from_storage(url)
+            
+            # Filter de te behouden bijlages: alleen de items wiens URL NIET in de deleted_urls lijst zit
+            # We filteren op het URL veld van de dict die normalize_bijlages heeft gemaakt
+            existing_bijlages = [b for b in existing_bijlages if b.get('url') not in deleted_urls]
 
         # 2) Upload nieuwe bijlages
         new_files = request.files.getlist('new_bijlages')
         if new_files:
             for nf in new_files:
                 if nf and nf.filename:
+                    # upload_file_to_storage retourneert een dict met de URL
                     uploaded = upload_file_to_storage(nf, store_in_db=STORE_FILES_IN_DB)
                     if uploaded:
                         existing_bijlages.append(uploaded)
 
-        # Build update_data - include status/prioriteit BEFORE update if manager
+        # Build update_data - CONVERTEER DE LIJST TERUG NAAR DE OPGESLAGEN STRING/TEXT-FORMAAT
         serialized_bijlages = serialize_bijlages_for_db(existing_bijlages if existing_bijlages else None)
+        
         update_data = {
             'order_nummer': order_nummer or None,
             'artikelnummer': safe_int(artikelnummer) if artikelnummer else None,
@@ -1562,7 +1567,7 @@ def klacht_bewerken(klacht_id):
             'klacht_omschrijving': klacht_omschrijving or None,
             'businessunit_id': bu_id if bu_id is not None else klacht_row.get('businessunit_id'),
             'datum_laatst_bewerkt': datetime.utcnow().isoformat(),
-            'bijlages': serialized_bijlages
+            'bijlages': serialized_bijlages # <--- Opgeslagen als TEXT (newline URL string)
         }
         # Alleen admin/key user kan verantwoordelijke wijzigen
         if session.get('user_rol') in ('Admin', 'Key user') and verantwoordelijke_id:
@@ -1682,16 +1687,12 @@ def klacht_verwijderen(klacht_id):
 
         # attempt to delete any attachments from storage (safely)
         for bijlage in normalize_bijlages(klacht.get('bijlages')):
-            url = None
-            try:
-                if isinstance(bijlage, dict):
-                    url = bijlage.get('url')
-                elif isinstance(bijlage, str):
-                    url = bijlage
-                if url:
+            url = bijlage.get('url')
+            if url:
+                try:
                     delete_file_from_storage(url)
-            except Exception as e:
-                print(f"Warning: error deleting attachment from storage: {e}")
+                except Exception as e:
+                    print(f"Warning: error deleting attachment from storage: {e}")
 
         # delete complaint
         del_resp = supabase.table("klacht").delete().eq("klacht_id", klacht_id).execute()
@@ -1844,18 +1845,19 @@ def klachten_export():
                 if not cat_type and cat_id in categorie_map:
                     cat_type = categorie_map[cat_id]
                 prioriteit = k.get('prioriteit')
+                
                 bijlage_urls = []
                 first_image_bytes = None
-                if isinstance(k.get('bijlages'), list):
-                    for b in k.get('bijlages'):
-                        b_url = b.get('url') if isinstance(b, dict) else (b if isinstance(b, str) else '')
-                        if b_url:
-                            bijlage_urls.append(b_url)
-                            if not first_image_bytes:
-                                # try fetch image only for first image-like url
-                                ct = b.get('content_type') if isinstance(b, dict) else ''
-                                if (ct and ct.startswith('image')) or b_url.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')) or b_url.startswith('data:image'):
-                                    first_image_bytes = fetch_image_bytes(b_url)
+                
+                # normalize_bijlages geeft een lijst van dicts terug met de URL, naam, is_image
+                for bijlage in normalize_bijlages(k.get('bijlages')):
+                    b_url = bijlage.get('url')
+                    if b_url:
+                        bijlage_urls.append(b_url)
+                        if not first_image_bytes:
+                            # Gebruik de is_image flag die we in normalize_bijlages hebben gezet
+                            if bijlage.get('is_image'):
+                                first_image_bytes = fetch_image_bytes(b_url)
 
                 row = [
                     klacht_id,
