@@ -106,6 +106,11 @@ class Klacht(db.Model):
     # Relatie naar statushistoriek
     statushistoriek = db.relationship('StatusHistoriek', backref='klacht', lazy=True, cascade='all, delete')
 
+    @property
+    def ondernemingsnummer(self):
+        """Afleidbare toegang tot het ondernemingsnummer via de gekoppelde klant."""
+        return self.klant.ondernemingsnummer if self.klant else None
+
 class StatusHistoriek(db.Model):
     __tablename__ = 'statushistoriek'
     status_id = db.Column(db.Integer, primary_key=True)

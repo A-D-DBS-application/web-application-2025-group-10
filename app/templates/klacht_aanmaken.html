@@ -55,11 +55,6 @@
                         </datalist>
                     </div>
 
-                    <div class="form-group">
-                        <label for="ondernemingsnummer" class="required">Ondernemingsnummer klant</label>
-                        <input type="text" name="ondernemingsnummer" id="ondernemingsnummer" placeholder="Ondernemingsnummer" value="{{ request.form.get('ondernemingsnummer','') }}" required>
-                    </div>
-
                     <div class="form-group full-width">
                         <label for="order_nummer" class="required">Ordernummer</label>
                         <input type="text" name="order_nummer" id="order_nummer" value="{{ request.form.get('order_nummer','') }}" required placeholder="Voer ordernummer in">

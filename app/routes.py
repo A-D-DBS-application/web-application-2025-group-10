@@ -21,7 +21,7 @@ from .category_suggester import (
     suggest_probleemcategorie,
     suggest_probleemcategorie_contextual_sqlalchemy,
 )
-from .models import Businessunit, Probleemcategorie, db, klacht_status_enum
+from .models import Businessunit, Klant, Probleemcategorie, db, klacht_status_enum
 
 main = Blueprint('main', __name__)
 
@@ -716,8 +716,10 @@ def klacht_details(klacht_id):
         return redirect(url_for('main.login'))
 
     try:
-        # use relational select to get klant + categorie with one call
-        klacht_response = supabase.table("klacht").select("*, klant:klant_id(klantnaam), categorie:probleemcategorie(type), verantwoordelijke:verantwoordelijke_id(naam), businessunit_ref:businessunit_id(naam)").eq("klacht_id", safe_int(klacht_id)).execute()
+        # use relational select to get klant + categorie with one call (incl. ondernemingsnummer)
+        klacht_response = supabase.table("klacht").select(
+            "*, klant:klant_id(klantnaam, ondernemingsnummer), categorie:probleemcategorie(type), verantwoordelijke:verantwoordelijke_id(naam), businessunit_ref:businessunit_id(naam)"
+        ).eq("klacht_id", safe_int(klacht_id)).execute()
         check_supabase_response(klacht_response, "fetching single complaint")
         if not klacht_response.data:
             flash('Klacht niet gevonden', 'error')
@@ -728,6 +730,19 @@ def klacht_details(klacht_id):
         if not can_view_klacht(klacht_data, safe_int(session['user_id']), session.get('user_rol')):
             flash('Toegang geweigerd', 'error')
             return redirect(url_for('main.user_klachten'))
+
+        try:
+            klant_id_val = safe_int(klacht_data.get('klant_id'))
+            if klant_id_val:
+                klant_obj = db.session.get(Klant, int(klant_id_val))
+                if klant_obj is None:
+                    klant_obj = db.session.query(Klant).get(int(klant_id_val))
+                if klant_obj:
+                    # Voeg ondernemingsnummer toe wanneer Supabase-relatie het niet meegeeft
+                    klacht_data['klant'] = klant_obj
+                    klacht_data['ondernemingsnummer'] = klant_obj.ondernemingsnummer
+        except Exception as e:
+            print(f"Warning: kon klant {klacht_data.get('klant_id')} niet laden via ORM: {e}")
 
         # statushistoriek (defensive)
         try:
@@ -894,7 +909,6 @@ def klacht_aanmaken():
             aantal_eenheden = request.form.get('aantal_eenheden', '').strip()
             mogelijke_oorzaak = request.form.get('mogelijke_oorzaak', '').strip()
             klacht_omschrijving = request.form.get('reden_afwijzing', '').strip()
-            ondernemingsnummer = request.form.get('ondernemingsnummer', '').strip()
             businessunit = request.form.get('businessunit', '').strip() or (session.get('businessunit_naam') or '').strip()
             bu_id = resolve_or_create_businessunit(businessunit) if businessunit else None
             print("DEBUG - Form data ontvangen:")
@@ -934,8 +948,19 @@ def klacht_aanmaken():
                     except Exception as ie2:
                         print(f"Nieuwe klant aanmaken mislukt: {ie2}")
 
-            if not klant_id or not categorie_id or not order_nummer or not artikelnummer or not aantal_eenheden or not klacht_omschrijving or not businessunit or not ondernemingsnummer:
-                flash('Klant, categorie, ordernummer, artikelnummer, aantal eenheden, businessunit, ondernemingsnummer en klacht omschrijving zijn verplicht', 'error')
+            klant_ondernemingsnummer = None
+            if klant_id:
+                try:
+                    klant_obj = db.session.get(Klant, int(klant_id))
+                    if klant_obj is None:
+                        klant_obj = db.session.query(Klant).get(int(klant_id))
+                    if klant_obj:
+                        klant_ondernemingsnummer = klant_obj.ondernemingsnummer
+                except Exception as e:
+                    print(f"Warning: kon klant {klant_id} niet laden voor ondernemingsnummer: {e}")
+
+            if not klant_id or not categorie_id or not order_nummer or not artikelnummer or not aantal_eenheden or not klacht_omschrijving or not businessunit:
+                flash('Klant, categorie, ordernummer, artikelnummer, aantal eenheden, businessunit en klacht omschrijving zijn verplicht', 'error')
                 return render_template(
                     'klacht_aanmaken.html',
                     user_naam=session.get('user_naam'),
@@ -946,13 +971,6 @@ def klacht_aanmaken():
                     suggested_categorie_type=suggested_categorie_type,
                     selected_categorie_id=selected_categorie_id
                 )
-
-            # Probeer ondernemingsnummer op te slaan bij de klant (indien beschikbaar)
-            if klant_id and ondernemingsnummer:
-                try:
-                    supabase.table("klant").update({"ondernemingsnummer": ondernemingsnummer}).eq("klant_id", int(klant_id)).execute()
-                except Exception as e:
-                    print(f"Warning: kon ondernemingsnummer niet opslaan voor klant {klant_id}: {e}")
 
             # ================== AANGESCHERPT: meerdere bestanden verwerken (Upload) ==================
             bijlages = []
@@ -1571,7 +1589,6 @@ def klacht_bewerken(klacht_id):
         categorie_id = request.form.get('categorie_id', '').strip()
         mogelijke_oorzaak = request.form.get('mogelijke_oorzaak', '').strip()
         klacht_omschrijving = request.form.get('reden_afwijzing', '').strip()
-        ondernemingsnummer = request.form.get('ondernemingsnummer', '').strip()
         businessunit = request.form.get('businessunit', '').strip() or (session.get('businessunit_naam') or '').strip()
         bu_id = resolve_or_create_businessunit(businessunit) if businessunit else None
         verantwoordelijke_id = request.form.get('vertegenwoordiger_id', '').strip()  # nieuw
@@ -1606,12 +1623,7 @@ def klacht_bewerken(klacht_id):
             klacht_row = klacht_get_resp.data[0]
             existing_bijlages_raw = klacht_row.get('bijlages')
             klant_id_existing = klacht_row.get('klant_id')
-            if klant_id_existing and ondernemingsnummer:
-                try:
-                    supabase.table("klant").update({"ondernemingsnummer": ondernemingsnummer}).eq("klant_id", int(klant_id_existing)).execute()
-                except Exception as e:
-                    print(f"Warning: kon ondernemingsnummer niet opslaan voor klant {klant_id_existing}: {e}")
-        
+
         # Converteer opgeslagen string naar lijst van dicts voor bewerking
         existing_bijlages = normalize_bijlages(existing_bijlages_raw)
 
