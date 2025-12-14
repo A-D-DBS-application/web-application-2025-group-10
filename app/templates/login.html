@@ -5,6 +5,10 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
 {% endblock %}
 {% block content %}
+<div class="login-logo text-center">
+    <!-- Gebruik url_for zodat Flask de correcte static URL voor het logo genereert -->
+    <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Vanca Group logo" class="login-logo__img">
+</div>
 <div class="login-card">
     <h2>Inloggen</h2>
 

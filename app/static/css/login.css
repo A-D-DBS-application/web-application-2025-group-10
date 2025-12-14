@@ -3,6 +3,19 @@ body.page-login {
     justify-content: center;
     align-items: center;
     height: 100vh;
+    flex-direction: column;
+}
+
+.login-logo {
+    margin-bottom: 20px;
+}
+
+.login-logo__img {
+    max-width: 180px;
+    width: 60vw;
+    height: auto;
+    display: block;
+    margin: 0 auto;
 }
 
 .login-card {
