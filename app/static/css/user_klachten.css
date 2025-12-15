@@ -1,54 +1,49 @@
-body.page-user-klachten { color: white; min-height: 100vh; padding: 20px; }
-body.page-user-klachten .container { max-width: 1200px; }
 body.page-user-klachten .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; gap: 12px; flex-wrap: wrap; }
 body.page-user-klachten .header h1 { margin: 0; }
 body.page-user-klachten .filters { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; margin-bottom: 20px; }
 body.page-user-klachten .filter-field { display: flex; flex-direction: column; gap: 6px; color: #fff; font-size: 13px; font-weight: 500; flex: 1; min-width: 140px; }
-body.page-user-klachten .filter-field[style*="min-width:150px"], 
-body.page-user-klachten .filter-field[style*="min-width:140px"], 
-body.page-user-klachten .filter-field[style*="min-width:130px"] { min-width: 150px !important; }
+body.page-user-klachten .filter-field[style*="min-width:150px"], body.page-user-klachten .filter-field[style*="min-width:140px"], body.page-user-klachten .filter-field[style*="min-width:130px"] { min-width: 150px !important; }
 body.page-user-klachten .filters { --filter-control-height: 52px; }
-body.page-user-klachten .filter-field input, body.page-user-klachten .filter-field select, body.page-user-klachten .filter-card { border: 1px solid #e5e7eb !important; }
-body.page-user-klachten .filter-field input, body.page-user-klachten .filter-field select { padding: 14px 16px; border-radius: 8px; font-size: 14px; height: var(--filter-control-height); box-sizing: border-box; width: 100%; background-color: white; color: #1f2937; transition: border-color 0.2s ease; }
-body.page-user-klachten .filter-field select#sort_order { width: auto !important; min-width: auto !important; padding-right: 40px; background-position: right 16px center; display: inline-block; }
+body.page-user-klachten .filter-field input, body.page-user-klachten .filter-field select, body.page-user-klachten .filter-card { border: 1px solid var(--border-soft) !important; border-radius: 8px; }
+body.page-user-klachten .filter-field input, body.page-user-klachten .filter-field select { padding: 14px 16px; font-size: 14px; height: var(--filter-control-height); box-sizing: border-box; width: 100%; background-color: var(--panel); color: var(--text-dark); transition: border-color 0.2s ease; }
+body.page-user-klachten .filter-field select#sort_order { width: auto !important; min-width: auto !important; padding-right: 40px; }
 body.page-user-klachten .filter-field.col-sort-prio { min-width: auto !important; flex: 0 0 auto !important; }
-body.page-user-klachten .filter-card { background: white; color: #1f2937; padding: 0 16px; border-radius: 8px; box-shadow: none; display: flex; flex-direction: row; align-items: center; gap: 10px; height: var(--filter-control-height); box-sizing: border-box; width: auto !important; min-width: auto !important; transition: border-color 0.2s ease; justify-content: flex-start; }
-body.page-user-klachten .filter-field input:hover, body.page-user-klachten .filter-field select:hover, body.page-user-klachten .filter-card:hover { border-color: #d1d5db !important; }
-body.page-user-klachten .filter-field input:focus, body.page-user-klachten .filter-field select:focus { outline: none; border-color: #10b981 !important; box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1); }
-body.page-user-klachten .filter-card .form-check-input { width: 18px; height: 18px; margin: 0; cursor: pointer; flex-shrink: 0; border: 2px solid #d1d5db; border-radius: 4px; }
-body.page-user-klachten .filter-card .form-check-input:checked { background-color: #10b981; border-color: #10b981; }
-body.page-user-klachten .filter-card .form-check-label { margin: 0; font-size: 14px; color: #1f2937; cursor: pointer; white-space: nowrap; line-height: 1.4; padding: 0; flex-shrink: 0; }
+body.page-user-klachten .filter-card { background: var(--panel); color: var(--text-dark); padding: 0 16px; box-shadow: none; display: flex; align-items: center; gap: 10px; height: var(--filter-control-height); box-sizing: border-box; width: auto !important; min-width: auto !important; transition: border-color 0.2s ease; justify-content: flex-start; }
+body.page-user-klachten .filter-field input:hover, body.page-user-klachten .filter-field select:hover, body.page-user-klachten .filter-card:hover { border-color: #9ca3af !important; }
+body.page-user-klachten .filter-field input:focus, body.page-user-klachten .filter-field select:focus { outline: none; border-color: var(--green-main) !important; box-shadow: 0 0 0 3px rgba(21, 128, 61, 0.1); }
+body.page-user-klachten .filter-card .form-check-input { width: 18px; height: 18px; margin: 0; cursor: pointer; flex-shrink: 0; border: 2px solid var(--border-soft); border-radius: 4px; }
+body.page-user-klachten .filter-card .form-check-input:checked { background-color: var(--green-main); border-color: var(--green-main); }
+body.page-user-klachten .filter-card .form-check-label { margin: 0; font-size: 14px; color: var(--text-dark); cursor: pointer; white-space: nowrap; line-height: 1.4; padding: 0; flex-shrink: 0; }
 body.page-user-klachten .filters .compact-btn { margin-top: 0; align-self: flex-start; flex: 0 0 auto; min-width: auto; }
-body.page-user-klachten .filters .compact-btn .action-link { height: var(--filter-control-height); font-size: 14px; padding: 0 24px; font-weight: 500; }
+body.page-user-klachten .filters .compact-btn .action-link { height: var(--filter-control-height); font-size: 14px; padding: 0 24px; font-weight: 500; background: var(--green-main); border: none; border-radius: 8px; color: white; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; transition: all 0.3s ease; }
+body.page-user-klachten .filters .compact-btn .action-link:hover { background: var(--green-dark); transform: translateY(-2px); }
 body.page-user-klachten .filters .compact-btn:nth-child(2) .action-link { background-color: #3b82f6; }
 body.page-user-klachten .filters .compact-btn:nth-child(2) .action-link:hover { background-color: #2563eb; }
-body.page-user-klachten .filters > .filter-field { min-height: calc(var(--filter-control-height) + 30px); }
-body.page-user-klachten .klachten-table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); table-layout: fixed; }
-body.page-user-klachten .klachten-table th, body.page-user-klachten .klachten-table td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #e5e7eb; color: #1f2937; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; }
-body.page-user-klachten .klachten-table th { background: #10b981; color: white; font-weight: 600; padding: 14px 12px; }
-body.page-user-klachten .klachten-table tr:hover { background: #f0fdf4; }
+body.page-user-klachten .klachten-table { width: 100%; border-collapse: collapse; margin-top: 20px; background: var(--panel); border-radius: 16px; overflow: hidden; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); table-layout: fixed; }
+body.page-user-klachten .klachten-table th, body.page-user-klachten .klachten-table td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border-soft); color: var(--text-dark); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; }
+body.page-user-klachten .klachten-table th { background: var(--green-main); color: white; font-weight: 600; padding: 14px 12px; }
+body.page-user-klachten .klachten-table tr:hover { background: var(--green-soft); }
 body.page-user-klachten .klachten-table .col-id { width: 60px; max-width: 60px; }
 body.page-user-klachten .klachten-table .col-date { width: 120px; max-width: 120px; font-size: 13px; }
-body.page-user-klachten .klachten-table .col-prioriteit { width: 100px; max-width: 100px; }
+/* Prioriteit kolom - HEADER naar links, INHOUD naar rechts */
+body.page-user-klachten .klachten-table .col-prioriteit { width: 120px; max-width: 120px; }
+body.page-user-klachten .klachten-table th.col-prioriteit { text-align: left; padding-left: 12px; padding-right: 12px; }
+body.page-user-klachten .klachten-table td.col-prioriteit { text-align: right; padding-left: 0; padding-right: 12px; display: block; }
+/* Status kolom - HEADER naar links, INHOUD naar rechts */
+body.page-user-klachten .klachten-table .col-status { width: 100px; max-width: 100px; }
+body.page-user-klachten .klachten-table th.col-status { text-align: left; padding-left: 12px; padding-right: 12px; }
+body.page-user-klachten .klachten-table td.col-status { text-align: right; padding-left: 0; padding-right: 12px; }
+/* Acties kolom - blijft gecentreerd */
 body.page-user-klachten .klachten-table .col-actions { width: 150px; max-width: 150px; text-align: center; }
-body.page-user-klachten .action-link { background: #10b981; color: white; padding: 10px 18px; text-decoration: none; border-radius: 8px; font-size: 13px; font-weight: 500; transition: all 0.3s ease; display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; height: 40px; border: none; outline: none; box-shadow: none; }
-body.page-user-klachten .action-link:focus { outline: none; box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2); }
-body.page-user-klachten .action-link:hover { background: #059669; transform: translateY(-2px); }
-/* VERWIJDER BUTTON MET ROOD KRUISJE */
-body.page-user-klachten .delete-btn { background: #d14343; color: white; border: none; padding: 5px 8px; border-radius: 8px; cursor: pointer; font-size: 12px; transition: all 0.3s ease; white-space: nowrap; min-width: 28px; }
+body.page-user-klachten .action-link { padding: 10px 18px; font-size: 13px; height: 40px; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; background: var(--green-main); color: white; border-radius: 8px; border: none; transition: all 0.3s ease; }
+body.page-user-klachten .action-link:hover { background: var(--green-dark); transform: translateY(-2px); }
+body.page-user-klachten .delete-btn { background: #d14343; color: white; border: none; padding: 5px 8px; border-radius: 8px; cursor: pointer; font-size: 12px; transition: all 0.3s ease; white-space: nowrap; min-width: 28px; height: 40px; }
 body.page-user-klachten .delete-btn:hover { background: #b32f2f; transform: translateY(-2px); }
-body.page-user-klachten .status-badge, body.page-user-klachten .priority-high, body.page-user-klachten .priority-normal { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; }
-body.page-user-klachten .status-open { background-color: #fef3c7; color: #92400e; }
-body.page-user-klachten .status-inprogress { background-color: #dbeafe; color: #1e40af; }
-body.page-user-klachten .status-resolved { background-color: #d1fae5; color: #065f46; }
-body.page-user-klachten .priority-high { background-color: #fee2e2; color: #dc2626; }
-body.page-user-klachten .priority-normal { background-color: #d1fae5; color: #065f46; }
-body.page-user-klachten .no-klachten { text-align: center; padding: 60px; background: white; border-radius: 16px; color: #1f2937; }
+body.page-user-klachten .no-klachten { text-align: center; padding: 60px; background: var(--panel); border-radius: 16px; color: var(--text-dark); }
 body.page-user-klachten .no-klachten h3 { font-size: 20px; margin-bottom: 20px; color: #374151; }
-body.page-user-klachten .no-klachten button { background: #10b981; color: white; border: none; padding: 14px 28px; border-radius: 12px; cursor: pointer; font-weight: 600; font-size: 15px; margin-top: 15px; transition: all 0.3s ease; }
-body.page-user-klachten .no-klachten button:hover { background: #059669; transform: translateY(-2px); }
+body.page-user-klachten .no-klachten button { background: var(--green-main); color: white; border: none; padding: 14px 28px; border-radius: 12px; cursor: pointer; font-weight: 600; font-size: 15px; margin-top: 15px; transition: all 0.3s ease; }
+body.page-user-klachten .no-klachten button:hover { background: var(--green-dark); transform: translateY(-2px); }
 body.page-user-klachten .flash-messages { margin: 20px 0; }
-body.page-user-klachten .alert { padding: 15px 20px; border-radius: 12px; margin-bottom: 15px; text-align: center; font-size: 14px; font-weight: 500; }
 @media (max-width: 1024px) { body.page-user-klachten .filters { gap: 10px; } body.page-user-klachten .filter-field, body.page-user-klachten .filter-field.col-sort-prio, body.page-user-klachten .filters .compact-btn { min-width: calc(50% - 10px) !important; flex: 0 0 calc(50% - 10px) !important; } }
 @media (max-width: 768px) { body.page-user-klachten { padding: 15px; } body.page-user-klachten .filters { flex-direction: column; align-items: stretch; gap: 15px; } body.page-user-klachten .filter-field, body.page-user-klachten .filter-field.col-sort-prio, body.page-user-klachten .filters .compact-btn, body.page-user-klachten .filter-field select#sort_order, body.page-user-klachten .filter-card { min-width: 100% !important; flex: 0 0 100% !important; width: 100% !important; } body.page-user-klachten .header { flex-direction: column; align-items: flex-start; gap: 15px; } body.page-user-klachten .header h1 { font-size: 24px; } }
-@media (max-width: 480px) { body.page-user-klachten .klachten-table { display: block; overflow-x: auto; } body.page-user-klachten .action-link, body.page-user-klachten .delete-btn { padding: 8px 12px; font-size: 12px; } }
+@media (max-width: 480px) { body.page-user-klachten .klachten-table { display: block; overflow-x: auto; } body.page-user-klachten .klachten-table .col-prioriteit { width: 100px; max-width: 100px; } body.page-user-klachten .klachten-table .col-status { width: 100px; max-width: 100px; } body.page-user-klachten .action-link, body.page-user-klachten .delete-btn { padding: 8px 12px; font-size: 12px; } }
