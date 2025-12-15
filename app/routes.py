@@ -800,27 +800,52 @@ def klacht_details(klacht_id):
         flash('Er ging iets mis bij het ophalen van de klacht details', 'error')
         return redirect(url_for('main.user_klachten'))
 
+
 # Helper: upload one file to Supabase Storage and return bijlage dict (met URL)
-def upload_file_to_storage(file_obj, store_in_db=False):
+def upload_file_to_storage(file_obj, store_in_db=False, klacht_id=None, klant_naam=None, klant_id_val=None, businessunit_name=None):
     if not file_obj or not getattr(file_obj, 'filename', None):
         return None
     try:
         safe_name = secure_filename(file_obj.filename)
         unique_id = str(uuid.uuid4())
-        unique_name = f"{unique_id}_{safe_name}"
+        
+        # NIEUW: Betere bestandsnaam en pad
+        
+        # 1. Bepaal Business Unit Deel
+        # We maken de naam veilig voor een map en vervangen spaties door underscores
+        bu_part = secure_filename(businessunit_name.replace(' ', '_')) if businessunit_name else "OnbekendeBU"
+        
+        # 2. Bepaal Klant Deel
+        # Gebruik alleen de veilige, verkorte naam van de klant (max 10 karakters)
+        if klant_naam:
+            # Maak veilig en beperk tot 10 karakters (of hele naam als korter)
+            klant_part = secure_filename(klant_naam).replace(' ', '_')[:15]
+        else:
+            klant_part = "OnbekendeKlant"
+            
+        # 3. Bepaal Klacht Deel
+        klacht_part = f"Klacht_{klacht_id}" if klacht_id else "TEMP"
+        
+        # NIEUWE Pad: {BUCKET_NAME}/<Businessunit_Naam>/<KlantNaam>/Klacht_<ID>/<UUID>_<OriginalName>
+        # Let op: BUCKET_NAME is al de root map (e.g. "bijlages")
+        path_in_bucket = f"{bu_part}/{klant_part}/{klacht_part}/{unique_id}_{safe_name}"
+        
         content_type = getattr(file_obj, 'mimetype', 'application/octet-stream')
         # Ensure pointer at start
         try:
             file_obj.stream.seek(0)
         except Exception:
             pass
-        file_bytes = file_obj.read()
+        
+        # File object kan nu uit BytesIO komen (in klacht_aanmaken)
+        if hasattr(file_obj, 'read'):
+            file_bytes = file_obj.read()
+        else:
+            file_bytes = file_obj['bytes'] # Fallback/assuming dict if needed
 
         # Dwing het gebruik van Supabase Storage af (STORE_FILES_IN_DB is False)
         if not STORE_FILES_IN_DB:
             # Upload to Supabase Storage
-            unique_name = f"{unique_id}_{safe_name}"
-            path_in_bucket = f"klachten/{unique_name}"
             upload_response = supabase.storage.from_(BUCKET_NAME).upload(path_in_bucket, file_bytes)
             file_url = f"{supabase_url}/storage/v1/object/public/{BUCKET_NAME}/{path_in_bucket}"
             bijlage = {
@@ -832,7 +857,7 @@ def upload_file_to_storage(file_obj, store_in_db=False):
             }
             return bijlage
         else:
-             # Oude Base64/DB opslag - Hoort niet meer te lopen, maar defensief
+             # Oude Base64/DB opslag - Hoort niet meer te lopen
             b64 = base64.b64encode(file_bytes).decode('utf-8')
             data_url = f"data:{content_type};base64,{b64}"
             return {
@@ -847,7 +872,7 @@ def upload_file_to_storage(file_obj, store_in_db=False):
         print(f"Upload error: {e}")
         traceback.print_exc()
         return None
-
+    
 # Helper: derive path in bucket from public URL and delete the object (no-op for data: urls)
 def delete_file_from_storage(file_url):
     try:
@@ -871,6 +896,7 @@ def delete_file_from_storage(file_url):
         traceback.print_exc()
         return None
 
+
 @main.route('/user/klacht/aanmaken', methods=['GET', 'POST'])
 def klacht_aanmaken():
     # Allow Users, Key users and Admins to create complaints
@@ -890,6 +916,8 @@ def klacht_aanmaken():
         categorieen = []
 
     bu_prefill = safe_int(session.get('businessunit_id'))
+    
+    # Haal initiële suggesties op voor de GET-pagina of als fallback na fout
     suggested_categorie_type = suggest_categorie_safe(
         request.form.get('reden_afwijzing', '').strip(),
         request.form.get('mogelijke_oorzaak', '').strip(),
@@ -909,36 +937,21 @@ def klacht_aanmaken():
             aantal_eenheden = request.form.get('aantal_eenheden', '').strip()
             mogelijke_oorzaak = request.form.get('mogelijke_oorzaak', '').strip()
             klacht_omschrijving = request.form.get('reden_afwijzing', '').strip()
+            
+            # De businessunit naam is cruciaal voor het pad, zorg dat deze correct is
             businessunit = request.form.get('businessunit', '').strip() or (session.get('businessunit_naam') or '').strip()
             bu_id = resolve_or_create_businessunit(businessunit) if businessunit else None
-            print("DEBUG - Form data ontvangen:")
-            print(f"  Klant ID: {klant_id}")
-            print(f"  Categorie ID: {categorie_id}")
-            print(f"  Ordernummer: {order_nummer}")
-            print(f"  Artikelnummer: {artikelnummer}")
-            print(f"  Aantal eenheden: {aantal_eenheden}")
-            print(f"  Businessunit: {businessunit}")
-
-            suggested_categorie_type = suggest_categorie_safe(
-                klacht_omschrijving,
-                mogelijke_oorzaak,
-                businessunit_id=safe_int(bu_id) if bu_id is not None else None
-            )
-            suggested_categorie_id = find_categorie_id_by_type(categorieen, suggested_categorie_type)
-            if not categorie_id and suggested_categorie_id:
-                categorie_id = str(suggested_categorie_id)
-            selected_categorie_id = categorie_id or suggested_categorie_id
             
-            # Valideer verplichte velden
+            # 1. Bepaal/Creëer Klant ID en Klantnaam
+            klant_naam_used = klant_naam
             if not klant_id and klant_naam:
-                # try to resolve klant_id by naam
+                # Probeer klant_id op te lossen/creëren
                 try:
                     kresp = supabase.table("klant").select("klant_id").ilike("klantnaam", klant_naam).execute()
                     if kresp.data and len(kresp.data) > 0:
                         klant_id = kresp.data[0].get('klant_id')
                 except Exception as ie:
                     print(f"Klant zoeken op naam mislukt: {ie}")
-                # if nog steeds geen klant_id: automatisch toevoegen
                 if not klant_id:
                     try:
                         insert_resp = supabase.table("klant").insert({"klantnaam": klant_naam}).execute()
@@ -947,20 +960,26 @@ def klacht_aanmaken():
                             klant_id = insert_resp.data[0].get('klant_id')
                     except Exception as ie2:
                         print(f"Nieuwe klant aanmaken mislukt: {ie2}")
-
-            klant_ondernemingsnummer = None
-            if klant_id:
+            elif klant_id and not klant_naam:
+                # Haal de naam op als we alleen het ID hebben
                 try:
-                    klant_obj = db.session.get(Klant, int(klant_id))
-                    if klant_obj is None:
-                        klant_obj = db.session.query(Klant).get(int(klant_id))
-                    if klant_obj:
-                        klant_ondernemingsnummer = klant_obj.ondernemingsnummer
-                except Exception as e:
-                    print(f"Warning: kon klant {klant_id} niet laden voor ondernemingsnummer: {e}")
-
+                    kresp = supabase.table("klant").select("klantnaam").eq("klant_id", int(klant_id)).execute()
+                    if kresp.data and len(kresp.data) > 0:
+                        klant_naam_used = kresp.data[0].get('klantnaam')
+                except Exception:
+                    pass
+            
+            # Valideer verplichte velden
             if not klant_id or not categorie_id or not order_nummer or not artikelnummer or not aantal_eenheden or not klacht_omschrijving or not businessunit:
                 flash('Klant, categorie, ordernummer, artikelnummer, aantal eenheden, businessunit en klacht omschrijving zijn verplicht', 'error')
+                # Zorg ervoor dat de suggestie correct werkt, ook na een POST-fout
+                suggested_categorie_type = suggest_categorie_safe(
+                    klacht_omschrijving,
+                    mogelijke_oorzaak,
+                    businessunit_id=safe_int(bu_id) if bu_id is not None else None
+                )
+                suggested_categorie_id = find_categorie_id_by_type(categorieen, suggested_categorie_type)
+                selected_categorie_id = categorie_id or suggested_categorie_id
                 return render_template(
                     'klacht_aanmaken.html',
                     user_naam=session.get('user_naam'),
@@ -972,20 +991,28 @@ def klacht_aanmaken():
                     selected_categorie_id=selected_categorie_id
                 )
 
-            # ================== AANGESCHERPT: meerdere bestanden verwerken (Upload) ==================
-            bijlages = []
-            # Accept both 'bijlage' and 'bijlage[]' (some clients use bracketed names)
+            # 2. Bepaal categorie op basis van suggestie (indien nodig)
+            suggested_categorie_type = suggest_categorie_safe(
+                klacht_omschrijving,
+                mogelijke_oorzaak,
+                businessunit_id=safe_int(bu_id) if bu_id is not None else None
+            )
+            suggested_categorie_id = find_categorie_id_by_type(categorieen, suggested_categorie_type)
+            if not categorie_id and suggested_categorie_id:
+                categorie_id = str(suggested_categorie_id)
+            selected_categorie_id = categorie_id or suggested_categorie_id
+
+            # 3. Bestanden in geheugen opslaan (upload uitstellen)
+            uploaded_files_in_memory = []
             files = []
             files += request.files.getlist('bijlage') or []
             files += request.files.getlist('bijlage[]') or []
-            # Filter out empty file entries and deduplicate by filename+size
+            
             seen_key = set()
-            upload_count = 0
-            filtered_files = []
             for f in files:
                 if not f or not getattr(f, 'filename', None):
                     continue
-                # Simple check for empty file
+                # Simple check for empty file and deduplication
                 f.stream.seek(0, os.SEEK_END)
                 size = f.stream.tell()
                 f.stream.seek(0)
@@ -995,31 +1022,20 @@ def klacht_aanmaken():
                 if key in seen_key:
                     continue
                 seen_key.add(key)
-                filtered_files.append(f)
-            
-            # Safely upload each file and collect the dictionary (met URL)
-            for f in filtered_files:
-                try:
-                    # upload_file_to_storage retourneert een dict met de URL
-                    uploaded = upload_file_to_storage(f, store_in_db=STORE_FILES_IN_DB)
-                    if uploaded:
-                        bijlages.append(uploaded)
-                        upload_count += 1
-                        print(f"DEBUG - Uploaded file: {uploaded.get('naam')} ({uploaded.get('url')})")
-                except Exception as e:
-                    print(f"DEBUG - Error uploading file {f.filename}: {e}")
-
-            if not bijlages:
-                bijlages = None
-            print(f"DEBUG - Total uploaded bijlages: {len(bijlages) if bijlages else 0}")
-            # Gebruik de nieuwe helper die alleen de URL-strings uit de dicts haalt en deze als TEXT opslaat.
-            serialized_bijlages = serialize_bijlages_for_db(bijlages)
-            # ================== EINDE AANGESCHERPT ==================
+                
+                # Lees de bytes en sla ze in het geheugen op, samen met de metadata
+                file_bytes = f.read()
+                f.stream.seek(0) # Reset pointer
+                uploaded_files_in_memory.append({
+                    "filename": f.filename,
+                    "mimetype": getattr(f, 'mimetype', 'application/octet-stream'),
+                    "bytes": file_bytes # Opslaan in geheugen
+                })
 
             # Alleen datum (zonder uur)
             vandaag = date.today().isoformat()
 
-            # Klacht aanmaken
+            # 4. Klacht aanmaken (EERST ZONDER BIJLAGES)
             nieuwe_klacht = {
                 'verantwoordelijke_id': session['user_id'],
                 'klant_id': int(klant_id),
@@ -1028,7 +1044,7 @@ def klacht_aanmaken():
                 'artikelnummer': safe_int(artikelnummer) if artikelnummer else None,
                 'aantal_eenheden': safe_int(aantal_eenheden) if aantal_eenheden else None,
                 'mogelijke_oorzaak': mogelijke_oorzaak or None,
-                'bijlages': serialized_bijlages,              # <--- hier komt de newline-string van URL's (TEXT)
+                'bijlages': None,              # <--- Eerst op None, upload komt later
                 'prioriteit': False,
                 'status': 'Ingediend',
                 'datum_melding': vandaag,
@@ -1046,10 +1062,6 @@ def klacht_aanmaken():
                     return m.group(1)
                 return None
 
-            def missing_column_in_payload(errmsg):
-                col = parse_missing_column(errmsg)
-                return col
-
             def without_column(payload, colname):
                 return {k: v for k, v in payload.items() if k != colname}
 
@@ -1062,7 +1074,7 @@ def klacht_aanmaken():
                     return resp
                 except Exception as ex:
                     msg = str(ex)
-                    col = missing_column_in_payload(msg)
+                    col = parse_missing_column(msg)
                     if col:
                         cleaned = without_column(payload, col)
                         resp_clean = supabase.table("klacht").insert(cleaned).execute()
@@ -1075,8 +1087,41 @@ def klacht_aanmaken():
             response = safe_insert(nieuwe_klacht)
 
             if response.data:
+                nieuw_id = response.data[0].get('klacht_id')
+                
+                # 5. Bestanden uploaden met de nieuwe Klacht ID en de klantinformatie
+                bijlages_uploaded = []
+                
+                for file_data in uploaded_files_in_memory:
+                    try:
+                        # Creëer een bestand-object-achtige structuur van de in-memory bytes
+                        file_obj_temp = io.BytesIO(file_data['bytes'])
+                        # Voeg filename en mimetype toe zodat upload_file_to_storage werkt
+                        file_obj_temp.filename = file_data['filename']
+                        file_obj_temp.mimetype = file_data['mimetype']
+                        
+                        # upload_file_to_storage met de NIEUWE parameters
+                        uploaded = upload_file_to_storage(
+                            file_obj_temp, 
+                            store_in_db=STORE_FILES_IN_DB,
+                            klacht_id=nieuw_id,
+                            klant_naam=klant_naam_used,
+                            klant_id_val=klant_id,
+                            businessunit_name=businessunit # <--- NIEUWE PARAMETER
+                        )
+                        if uploaded:
+                            bijlages_uploaded.append(uploaded)
+                    except Exception as e:
+                        print(f"DEBUG - Error uploading file {file_data['filename']} after insert: {e}")
+                
+                # 6. Update de klachtrij met de bijlage-URL's
+                if bijlages_uploaded:
+                    serialized_bijlages = serialize_bijlages_for_db(bijlages_uploaded)
+                    update_resp = supabase.table("klacht").update({'bijlages': serialized_bijlages}).eq("klacht_id", nieuw_id).execute()
+                    check_supabase_response(update_resp, "update klacht met bijlages na upload")
+                
+                
                 try:
-                    nieuw_id = response.data[0].get('klacht_id')
                     notify_new_complaint(businessunit, nieuw_id)
                 except Exception as e:
                     print(f"Error sending new complaint notifications: {e}")
