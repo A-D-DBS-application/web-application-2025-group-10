@@ -37,4 +37,10 @@ body.page-klacht-aanmaken .alert-error { background: #ffe6e6; color: #d00000; bo
 body.page-klacht-aanmaken .alert-success { background: #e6ffe6; color: #3a7854; border: 1px solid #ccffcc; }
 body.page-klacht-aanmaken .file-preview { margin-top: 10px; padding: 10px; background: #f0fdf4; border-radius: 6px; border: 1px solid #3a7854; }
 body.page-klacht-aanmaken .file-preview img { max-width: 200px; max-height: 200px; border-radius: 4px; }
+body.page-klacht-aanmaken .hint { font-size: 0.9rem; color: #4b5563; margin-top: 6px; }
+body.page-klacht-aanmaken .link-button { background: none; border: none; color: #0b7149; cursor: pointer; padding: 0; font-weight: 600; }
+body.page-klacht-aanmaken .link-button:hover { text-decoration: underline; }
+body.page-klacht-aanmaken .new-customer { background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 10px; padding: 12px; margin-top: 8px; }
+body.page-klacht-aanmaken .new-customer .form-group { margin-bottom: 10px; }
+body.page-klacht-aanmaken .new-customer input { background: white; }
 @media (max-width: 768px) { body.page-klacht-aanmaken .form-grid { grid-template-columns: 1fr; } body.page-klacht-aanmaken .header { flex-direction: column; gap: 15px; text-align: center; } body.page-klacht-aanmaken .button-group { flex-direction: column; } }

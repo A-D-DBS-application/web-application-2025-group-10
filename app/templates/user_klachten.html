@@ -84,12 +84,14 @@
                 <label class="form-check-label mb-0" for="high_priority">Hoge prioriteit</label>
             </div>
         </div>
-        <div class="filter-field compact-btn" style="min-width:auto; margin-left:auto;">
-            <button type="submit" class="action-link" style="padding:10px 16px; white-space:nowrap;">Filter</button>
+        <div class="filter-field col-sort-prio filter-button-inline" style="min-width:auto;">
+            <label>&nbsp;</label>
+            <button type="submit" class="action-link" style="padding:10px 16px; white-space:nowrap; width:100%;">Filter</button>
         </div>
         {% if session.get('user_rol') in ['Admin', 'Key user'] %}
-        <div class="filter-field compact-btn" style="min-width:auto;">
-            <a href="/user/klachten/export{% if request.query_string %}?{{ request.query_string.decode('utf-8') }}{% endif %}" class="action-link" style="padding:10px 16px; white-space:nowrap;">Export CSV</a>
+        <div class="filter-field col-sort-prio compact-btn export-single" style="min-width:auto;">
+            <label>&nbsp;</label>
+            <a href="/user/klachten/export{% if request.query_string %}?{{ request.query_string.decode('utf-8') }}&include_photos=false&format=csv{% else %}?include_photos=false&format=csv{% endif %}" class="action-link" style="padding:10px 16px; white-space:nowrap; width:100%;">Export CSV (zonder foto's)</a>
         </div>
         {% endif %}
     </form>

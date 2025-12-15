@@ -19,6 +19,11 @@ body.page-user-klachten .filters .compact-btn .action-link { height: var(--filte
 body.page-user-klachten .filters .compact-btn .action-link:hover { background: var(--green-dark); transform: translateY(-2px); }
 body.page-user-klachten .filters .compact-btn:nth-child(2) .action-link { background-color: #3b82f6; }
 body.page-user-klachten .filters .compact-btn:nth-child(2) .action-link:hover { background-color: #2563eb; }
+body.page-user-klachten .filter-button-inline .action-link,
+body.page-user-klachten .export-single .action-link { height: var(--filter-control-height); width: 100%; }
+body.page-user-klachten .export-single .action-link { background: #3b82f6; }
+body.page-user-klachten .export-single .action-link:hover { background: #2563eb; }
+body.page-user-klachten .no-results-hint { margin-top: 10px; padding: 10px 12px; background: #fff7ed; border: 1px solid #fdba74; color: #9a3412; border-radius: 8px; font-size: 13px; }
 body.page-user-klachten .klachten-table { width: 100%; border-collapse: collapse; margin-top: 20px; background: var(--panel); border-radius: 16px; overflow: hidden; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); table-layout: fixed; }
 body.page-user-klachten .klachten-table th, body.page-user-klachten .klachten-table td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border-soft); color: var(--text-dark); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; }
 body.page-user-klachten .klachten-table th { background: var(--green-main); color: white; font-weight: 600; padding: 14px 12px; }

@@ -2,8 +2,6 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 import csv
 import io
 import os
-import smtplib
-from email.message import EmailMessage
 import base64
 # import json  <--- VERWIJDERD
 import uuid
@@ -124,7 +122,6 @@ def user_dashboard():
     if 'user_id' not in session:
         flash('Toegang geweigerd', 'error')
         return redirect(url_for('main.login'))
-    notify_stale_complaints()
     role = normalized_role()
     if role == 'Admin':
         return redirect(url_for('main.admin_dashboard'))
@@ -139,6 +136,52 @@ def safe_int(val):
         return int(val)
     except Exception:
         return val
+
+# Helper: ensure product exists before inserting a complaint
+def ensure_product_exists(artikelnummer, artikelnaam=None):
+    if not artikelnummer:
+        return None
+    artikel_nmr = safe_int(artikelnummer)
+    if artikel_nmr is None:
+        artikel_nmr = artikelnummer
+    try:
+        resp = supabase.table("product").select("artikel_nr").eq("artikel_nr", artikel_nmr).limit(1).execute()
+        check_supabase_response(resp, "lookup product for klacht")
+        if resp.data:
+            return artikel_nmr
+    except Exception as e:
+        print(f"Warning: product lookup failed: {e}")
+    try:
+        payload = {"artikel_nr": artikel_nmr}
+        if artikelnaam:
+            payload["naam"] = artikelnaam.strip()
+        insert_resp = supabase.table("product").insert(payload).execute()
+        check_supabase_response(insert_resp, "insert new product for klacht")
+        return artikel_nmr
+    except Exception as e:
+        print(f"Warning: insert product failed: {e}")
+    return artikel_nmr
+
+# Helper: ensure order exists before inserting a complaint
+def ensure_order_exists(order_nummer, klant_id=None):
+    if not order_nummer:
+        return None
+    try:
+        resp = supabase.table("order").select("order_nummer").eq("order_nummer", order_nummer).limit(1).execute()
+        check_supabase_response(resp, "lookup order for klacht")
+        if resp.data:
+            return order_nummer
+    except Exception as e:
+        print(f"Warning: order lookup failed: {e}")
+    try:
+        payload = {"order_nummer": order_nummer}
+        if klant_id:
+            payload["klant_id"] = safe_int(klant_id)
+        insert_resp = supabase.table("order").insert(payload).execute()
+        check_supabase_response(insert_resp, "insert new order for klacht")
+    except Exception as e:
+        print(f"Warning: insert order failed: {e}")
+    return order_nummer
 
 # Helper: fetch businessunit naam (new schema)
 def get_businessunit_name(bu_id):
@@ -193,60 +236,6 @@ def get_users_by_roles(roles=None, businessunit=None):
     except Exception as e:
         print(f"Warning: get_users_by_roles failed: {e}")
         return []
-
-# Helper: stuur mail naar admins/key-users bij nieuwe klacht
-def notify_new_complaint(businessunit, klacht_id):
-    try:
-        recipients = get_users_by_roles(['Admin', 'Key user'], businessunit=businessunit)
-        emails = [u.get('email') for u in recipients if u.get('email')]
-        if not emails:
-            return
-        try:
-            link = url_for('main.klacht_details', klacht_id=klacht_id, _external=True)
-        except Exception:
-            link = f"/user/klacht/{klacht_id}/details"
-        send_email("Nieuwe klacht ingediend", f"Er is een nieuwe klacht #{klacht_id} voor businessunit {businessunit}. Bekijk: {link}", emails)
-    except Exception as e:
-        print(f"notify_new_complaint error: {e}")
-
-# Helper: stuur mails voor klachten die langer dan 7 dagen op Ingediend staan
-def notify_stale_complaints():
-    try:
-        resp = supabase.table("klacht").select("*").eq("status", "Ingediend").execute()
-        check_supabase_response(resp, "stale klachten")
-        klachten = resp.data if resp.data else []
-        today = date.today()
-        for k in klachten:
-            try:
-                dt_str = k.get('datum_melding')
-                if not dt_str:
-                    continue
-                # parse date yyyy-mm-dd
-                dt_date = date.fromisoformat(str(dt_str)[:10])
-                if (today - dt_date).days < 7:
-                    continue
-                bu = k.get('businessunit') or get_businessunit_name(k.get('businessunit_id'))
-                klacht_id = k.get('klacht_id')
-                # mails naar verantwoordelijke (verantwoordelijke_id), admins/key users van bu
-                recipients = []
-                verantwoordelijke_id = k.get('verantwoordelijke_id') or k.get('vertegenwoordiger_id')
-                if verantwoordelijke_id:
-                    user_resp = supabase.table("gebruiker").select("email, businessunit_id").eq("gebruiker_id", safe_int(verantwoordelijke_id)).execute()
-                    if user_resp.data and user_resp.data[0].get('email'):
-                        recipients.append(user_resp.data[0]['email'])
-                recipients += [u.get('email') for u in get_users_by_roles(['Admin', 'Key user'], businessunit=bu) if u.get('email')]
-                # dedupe
-                recipients = list({r for r in recipients if r})
-                if recipients:
-                    try:
-                        link = url_for('main.klacht_details', klacht_id=klacht_id, _external=True)
-                    except Exception:
-                        link = f"/user/klacht/{klacht_id}/details"
-                    send_email("Reminder: klacht staat 7+ dagen op Ingediend", f"Klacht #{klacht_id} staat langer dan een week op Ingediend. Bekijk: {link}", recipients)
-            except Exception as inner:
-                print(f"stale notification error for klacht {k.get('klacht_id')}: {inner}")
-    except Exception as e:
-        print(f"notify_stale_complaints error: {e}")
 
 # Helper: fetch image bytes (from URL or data:) for embedding in Excel
 def fetch_image_bytes(url):
@@ -482,6 +471,10 @@ def normalize_klacht_row(row):
         k['klacht_omschrijving'] = k.get('reden_afwijzing')
     if 'opmerking_status_wijziging' in k and 'gm_opmerking' not in k:
         k['gm_opmerking'] = k.get('opmerking_status_wijziging')
+    if 'gm_opmerking' in k and 'opmerking' not in k:
+        k['opmerking'] = k.get('gm_opmerking')
+    if 'opmerking_status_wijziging' in k and 'opmerking' not in k:
+        k['opmerking'] = k.get('opmerking_status_wijziging')
     # businessunit id + naam
     bu_id = k.get('businessunit_id')
     k['businessunit_id'] = bu_id
@@ -934,6 +927,7 @@ def klacht_aanmaken():
             categorie_id = request.form.get('categorie_id', '').strip()
             order_nummer = request.form.get('order_nummer', '').strip()
             artikelnummer = request.form.get('artikelnummer', '').strip()
+            artikelnaam = request.form.get('artikel_naam', '').strip()
             aantal_eenheden = request.form.get('aantal_eenheden', '').strip()
             mogelijke_oorzaak = request.form.get('mogelijke_oorzaak', '').strip()
             klacht_omschrijving = request.form.get('reden_afwijzing', '').strip()
@@ -1036,6 +1030,8 @@ def klacht_aanmaken():
             vandaag = date.today().isoformat()
 
             # 4. Klacht aanmaken (EERST ZONDER BIJLAGES)
+            artikelnummer = ensure_product_exists(artikelnummer, artikelnaam)
+            order_nummer = ensure_order_exists(order_nummer, klant_id)
             nieuwe_klacht = {
                 'verantwoordelijke_id': session['user_id'],
                 'klant_id': int(klant_id),
@@ -1121,11 +1117,6 @@ def klacht_aanmaken():
                     check_supabase_response(update_resp, "update klacht met bijlages na upload")
                 
                 
-                try:
-                    notify_new_complaint(businessunit, nieuw_id)
-                except Exception as e:
-                    print(f"Error sending new complaint notifications: {e}")
-                
                 flash('Klacht succesvol aangemaakt!', 'success')
                 return redirect(url_for('main.user_klachten'))
             else:
@@ -1178,7 +1169,6 @@ def admin_dashboard():
     if normalized_role() != 'Admin':
         flash('Toegang geweigerd', 'error')
         return redirect(url_for('main.user_dashboard'))
-    notify_stale_complaints()
     businessunits_used = get_businessunits_list()
 
     total_klachten = 0
@@ -1432,12 +1422,12 @@ def keyuser_assign_klacht(klacht_id):
         return redirect(url_for('main.login'))
     try:
         # haal klacht op om businessunit te checken
-        klacht_resp = supabase.table("klacht").select("businessunit_id, businessunit").eq("klacht_id", klacht_id).execute()
+        klacht_resp = supabase.table("klacht").select("businessunit_id").eq("klacht_id", klacht_id).execute()
         check_supabase_response(klacht_resp, "fetch klacht for assign")
         klacht_obj = klacht_resp.data[0] if klacht_resp.data else {}
         if role == 'Key user':
             my_bu = session.get('businessunit_naam')
-            complaint_bu = klacht_obj.get('businessunit') or get_businessunit_name(klacht_obj.get('businessunit_id'))
+            complaint_bu = get_businessunit_name(klacht_obj.get('businessunit_id'))
             if my_bu and complaint_bu and complaint_bu != my_bu:
                 flash('Toegang geweigerd voor deze businessunit', 'error')
                 return redirect(url_for('main.klacht_details', klacht_id=klacht_id))
@@ -1485,7 +1475,6 @@ def keyuser_dashboard():
     if normalized_role() not in ('Key user', 'Admin'):
         flash('Toegang geweigerd', 'error')
         return redirect(url_for('main.user_dashboard'))
-    notify_stale_complaints()
 
     total_klachten = 0
     today_new = 0
@@ -1595,11 +1584,6 @@ def can_edit_klacht(klacht, user_id, user_role):
         return True
     return owner_id == user_id
 
-# Simple send_email helper (temporarily disabled to avoid sending mails during development)
-def send_email(subject, body, to):
-    print(f"[EMAIL DISABLED] subject={subject} to={to} body={body}")
-    return False
-
 @main.route('/user/klacht/<int:klacht_id>/bewerken', methods=['POST'])
 def klacht_bewerken(klacht_id):
     if 'user_id' not in session:
@@ -1664,6 +1648,7 @@ def klacht_bewerken(klacht_id):
         klacht_get_resp = supabase.table("klacht").select("*").eq("klacht_id", klacht_id).execute()
         existing_bijlages_raw = None
         klacht_row = {}
+        klant_id_existing = None
         if klacht_get_resp.data and len(klacht_get_resp.data) > 0:
             klacht_row = klacht_get_resp.data[0]
             existing_bijlages_raw = klacht_row.get('bijlages')
@@ -1696,6 +1681,10 @@ def klacht_bewerken(klacht_id):
                     if uploaded:
                         existing_bijlages.append(uploaded)
 
+        # Ensure referenced artikel/order rows exist before persisting the complaint
+        artikelnummer = ensure_product_exists(artikelnummer, None)
+        order_nummer = ensure_order_exists(order_nummer, klant_id_existing)
+
         # Build update_data - CONVERTEER DE LIJST TERUG NAAR DE OPGESLAGEN STRING/TEXT-FORMAAT
         serialized_bijlages = serialize_bijlages_for_db(existing_bijlages if existing_bijlages else None)
         
@@ -1706,6 +1695,7 @@ def klacht_bewerken(klacht_id):
             'categorie_id': int(categorie_id),
             'mogelijke_oorzaak': mogelijke_oorzaak or None,
             'klacht_omschrijving': klacht_omschrijving or None,
+            'opmerking': request.form.get('opmerking') or None,
             'businessunit_id': bu_id if bu_id is not None else klacht_row.get('businessunit_id'),
             'datum_laatst_bewerkt': datetime.utcnow().isoformat(),
             'bijlages': serialized_bijlages # <--- Opgeslagen als TEXT (newline URL string)
@@ -1777,16 +1767,6 @@ def klacht_bewerken(klacht_id):
                     check_supabase_response(hist_resp, "insert statushistoriek")
                 except Exception as e:
                     print(f"Error inserting statushistoriek: {e}")
-
-                # On Goedgekeurd -> notify sales managers (rol Admin)
-                if status_in_form == 'Goedgekeurd':
-                    try:
-                        sm_resp = supabase.table("gebruiker").select("email").eq("rol", "Admin").execute()
-                        emails = [u['email'] for u in (sm_resp.data or []) if u.get('email')]
-                        if emails:
-                            send_email("Klacht Goedgekeurd", f"Klacht #{klacht_id} is goedgekeurd.", emails)
-                    except Exception as e:
-                        print(f"Error sending approve emails: {e}")
 
             flash('Klacht succesvol bijgewerkt!', 'success')
         else:
@@ -1945,6 +1925,8 @@ def klachten_export():
             'Categorie ID',
             'Categorie type',
             'Status',
+            'Mogelijke oorzaak',
+            'Klacht omschrijving',
             'Prioriteit',
             'Datum melding',
             'Businessunit',
@@ -1955,7 +1937,7 @@ def klachten_export():
         ws.append(header)
 
         # set column widths for readability
-        widths = [12, 18, 24, 12, 24, 16, 16, 14, 12, 18, 12, 12, 16, 16, 18, 40, 18]
+        widths = [12, 18, 24, 12, 24, 16, 16, 14, 12, 18, 16, 32, 32, 12, 16, 16, 18, 40, 18]
         for i, w in enumerate(widths, start=1):
             ws.column_dimensions[chr(64 + i)].width = w
 
@@ -2010,11 +1992,14 @@ def klachten_export():
                     cat_id,
                     cat_type,
                     k.get('status') or '',
+                    k.get('mogelijke_oorzaak') or '',
+                    k.get('klacht_omschrijving') or k.get('reden_afwijzing') or '',
                     'Ja' if prioriteit else 'Nee',
                     k.get('datum_melding') or '',
                     k.get('businessunit') or get_businessunit_name(k.get('businessunit_id')) or '',
                     ondernemingsnummer or k.get('ondernemingsnummer') or '',
-                    "\n".join(bijlage_urls)
+                    "\n".join(bijlage_urls),
+                    ''
                 ]
                 ws.append(row)
 
