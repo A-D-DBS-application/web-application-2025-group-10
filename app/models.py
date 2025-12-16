@@ -35,7 +35,7 @@ class Gebruiker(db.Model):
     email = db.Column(db.Text, nullable=False, unique=True)
     rol = db.Column(gebruikersrol_enum, nullable=False)
     wachtwoord = db.Column(db.Text, nullable=False)
-    telefoon = telefoon = db.Column(db.Text)
+    telefoon = db.Column(db.Text)
     businessunit_id = db.Column(db.BigInteger, db.ForeignKey('businessunit.businessunit_id', onupdate='CASCADE'))
     
     def __repr__(self):
@@ -74,7 +74,7 @@ class Order(db.Model):
     def __repr__(self):
         return f"<Order(nummer='{self.order_nummer}', klant_id={self.klant_id})>"
 
-    producten = db.relationship('Product', secondary='producten_order',backref=db.backref('orders_via_m2m', lazy='dynamic'),lazy='dynamic')
+    producten = db.relationship('Product', secondary='producten_order', lazy='dynamic', overlaps="orders,producten")
 
 class Probleemcategorie(db.Model):
     __tablename__ = 'probleemcategorie'
@@ -105,6 +105,15 @@ class Klacht(db.Model):
 
     # Relatie naar statushistoriek
     statushistoriek = db.relationship('StatusHistoriek', backref='klacht', lazy=True, cascade='all, delete')
+    
+    # Relatie naar product (via artikelnummer)
+    product = db.relationship('Product', backref='klachten', lazy=True, foreign_keys=[artikelnummer])
+    
+    # Relatie naar order (via order_nummer)
+    order = db.relationship('Order', backref='klachten', lazy=True, foreign_keys=[order_nummer])
+    
+    # Relatie naar businessunit
+    businessunit = db.relationship('Businessunit', backref='klachten', lazy=True, foreign_keys=[businessunit_id])
 
     @property
     def ondernemingsnummer(self):
@@ -129,7 +138,7 @@ class Product(db.Model):
     def __repr__(self):
         return f"<Product(artikel_nr={self.artikel_nr}, naam='{self.naam}')>"
 
-    orders = db.relationship('Order', secondary='producten_order', backref=db.backref('producten_via_m2m', lazy='dynamic'),lazy='dynamic')
+    orders = db.relationship('Order', secondary='producten_order', lazy='dynamic', overlaps="orders,producten")
 
 class Producten_Order(db.Model):
     __tablename__ = 'producten_order'
@@ -137,8 +146,8 @@ class Producten_Order(db.Model):
     artikel_nr = db.Column(db.BigInteger, db.ForeignKey('product.artikel_nr'), primary_key=True, nullable=False)
     aantal = db.Column(db.Integer, nullable=False)
 
-    order = db.relationship('Order', backref='product_orders', lazy=True)
-    product = db.relationship('Product', backref='order_links', lazy=True)
+    order = db.relationship('Order', backref='product_orders', lazy=True, overlaps="orders,producten")
+    product = db.relationship('Product', backref='order_links', lazy=True, overlaps="orders,producten")
 
 
     

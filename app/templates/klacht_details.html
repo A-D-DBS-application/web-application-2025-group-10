@@ -22,8 +22,13 @@
                 <div class="detail-value">
                     <div class="readonly-field">
                         {% if klacht.datum_melding %}
-                            {% if 'T' in klacht.datum_melding %}
-                                {{ klacht.datum_melding.split('T')[0] }}
+                            {% if klacht.datum_melding %}
+                                {% set datum_str = klacht.datum_melding|string %}
+                                {% if 'T' in datum_str %}
+                                    {{ datum_str.split('T')[0] }}
+                                {% else %}
+                                    {{ datum_str[:10] if datum_str|length >= 10 else datum_str }}
+                                {% endif %}
                             {% else %}
                                 {{ klacht.datum_melding[:10] if klacht.datum_melding|length >= 10 else klacht.datum_melding }}
                             {% endif %}
