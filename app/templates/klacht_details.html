@@ -64,7 +64,7 @@
                                 <option value="{{ r.gebruiker_id }}" {% if (klacht.verantwoordelijke_id or klacht.vertegenwoordiger_id) == r.gebruiker_id %}selected{% endif %}>{{ r.naam }}{% if r.rol %} ({{ r.rol }}){% endif %}</option>
                             {% endfor %}
                         </select>
-                        <button type="submit" class="save-btn" formaction="{{ url_for('main.keyuser_assign_klacht', klacht_id=klacht_id) }}" formmethod="POST" formnovalidate>Toewijzen</button>
+                        <!-- Toewijzen-knop verwijderd; bewaren gebeurt via de algemene Opslaan-knop onderaan -->
                     </div>
                     {% endif %}
                 </div>
@@ -137,8 +137,11 @@
                             {% set bijlage_naam = bijlage.get('naam') if bijlage is mapping and bijlage.get('naam') else (bijlage_url.split('/')[-1] if bijlage_url and '/' in bijlage_url else ('bijlage_' ~ loop.index)) %}
                             <div class="attachment-row" id="bijlage-row-{{ bijlage_id }}">
                                 <div class="attachment-meta">
-                                    <a href="{{ bijlage_url }}" target="_blank" aria-label="Open bijlage {{ bijlage_naam }}" class="attachment-link">{{ bijlage_naam }}</a>
-                                    <div style="font-size: 12px; color: #6b7280; word-break: break-all;">{{ bijlage_url }}</div>
+                                    {% if bijlage_url and (bijlage_url.lower().endswith('.png') or bijlage_url.lower().endswith('.jpg') or bijlage_url.lower().endswith('.jpeg') or bijlage_url.lower().endswith('.gif') or bijlage_url.lower().endswith('.webp')) %}
+                                        <img src="{{ bijlage_url }}" alt="{{ bijlage_naam }}" style="max-width: 200px; max-height: 200px; border-radius: 8px; object-fit: cover;">
+                                    {% else %}
+                                        <a href="{{ bijlage_url }}" target="_blank" aria-label="Open bijlage {{ bijlage_naam }}" class="attachment-link">{{ bijlage_naam }}</a>
+                                    {% endif %}
                                 </div>
                                 <div class="attachment-actions">
                                     <button type="button" class="delete-btn" onclick="toggleDelete('{{ bijlage_id }}')">Verwijderen</button>
@@ -294,3 +297,4 @@
     })();
 </script>
 {% endblock %}
+

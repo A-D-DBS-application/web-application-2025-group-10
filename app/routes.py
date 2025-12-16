@@ -12,6 +12,7 @@ from openpyxl import Workbook
 from openpyxl.drawing.image import Image as XLImage
 from openpyxl.worksheet.table import Table, TableStyleInfo
 import re
+from sqlalchemy.exc import IntegrityError
 from .category_suggester import (
     suggest_probleemcategorie,
     suggest_probleemcategorie_contextual_sqlalchemy,
@@ -485,6 +486,10 @@ def user_klachten():
             klant = services.get_klant_by_name(klant_naam)
             if klant:
                 klant_id = klant.klant_id
+            else:
+                # Klantnaam ingevuld maar niet gevonden in systeem:
+                # toon expliciet geen resultaten voor deze filter
+                klachten = []
         
         categorie_id = request.args.get('categorie_id')
         status = request.args.get('status')
@@ -1051,21 +1056,25 @@ def admin_users_page():
 # Update role usage when creating users
 @main.route('/admin/users', methods=['POST'])
 def admin_create_user():
-    if 'user_id' not in session or not is_manager_role():
+    # Alleen admins mogen gebruikers aanmaken vanuit het beheer scherm
+    if 'user_id' not in session or normalized_role() != 'Admin':
         flash('Toegang geweigerd', 'error')
-        return redirect(url_for('main.user_dashboard'))
-    # form fields
-    naam = request.form.get('naam')
-    email = request.form.get('email')
-    rol = request.form.get('rol') or 'User'
-    wachtwoord = request.form.get('wachtwoord') or 'changeme'
-    businessunit_raw = request.form.get('businessunit') or None
+        return redirect(url_for('main.login'))
 
+    # Form velden ophalen en normaliseren
+    naam = (request.form.get('naam') or '').strip()
+    email = (request.form.get('email') or '').strip()
+    rol = (request.form.get('rol') or 'User').strip()
+    wachtwoord = (request.form.get('wachtwoord') or 'changeme').strip()
+    businessunit_raw = (request.form.get('businessunit') or '').strip() or None
+
+    # Basisvalidatie
     if not naam or not email:
         flash('Naam en email zijn verplicht', 'error')
-        return redirect(url_for('main.user_dashboard'))
+        return redirect(url_for('main.admin_users_page'))
     try:
-        hashed = generate_password_hash(wachtwoord)
+        # Let op: wachtwoord wordt nu in platte tekst opgeslagen op verzoek
+        hashed = wachtwoord
         bu_id = services.resolve_or_create_businessunit(businessunit_raw)
         
         # Check of email al bestaat
@@ -1084,6 +1093,36 @@ def admin_create_user():
         db.session.add(new_user)
         db.session.commit()
         flash('Gebruiker succesvol aangemaakt', 'success')
+    except IntegrityError as ie:
+        # Mogelijke sequence desync na data-import: reset sequence en probeer opnieuw
+        db.session.rollback()
+        try:
+            max_id = db.session.query(db.func.max(Gebruiker.gebruiker_id)).scalar() or 0
+            # Alleen uitvoeren voor PostgreSQL
+            if db.engine.dialect.name == 'postgresql':
+                db.session.execute(
+                    db.text(
+                        "SELECT setval(pg_get_serial_sequence('gebruiker','gebruiker_id'), :newval, true)"
+                    ),
+                    {'newval': max_id}
+                )
+                # Maak nieuwe instantie na rollback
+                new_user_retry = Gebruiker(
+                    naam=naam,
+                    email=email,
+                    rol=(rol or '').strip().capitalize(),
+                    wachtwoord=hashed,
+                    businessunit_id=bu_id
+                )
+                db.session.add(new_user_retry)
+                db.session.commit()
+                flash('Gebruiker succesvol aangemaakt', 'success')
+            else:
+                flash('Er ging iets mis bij het aanmaken van de gebruiker (PK conflict)', 'error')
+        except Exception as e_reset:
+            db.session.rollback()
+            print(f"Error resetting gebruiker_id sequence: {e_reset}")
+            flash('Er ging iets mis bij het aanmaken van de gebruiker', 'error')
     except Exception as e:
         print(f"Error creating user: {e}")
         db.session.rollback()
@@ -1156,7 +1195,8 @@ def admin_businessunits_page():
         flash('Toegang geweigerd', 'error')
         return redirect(url_for('main.login'))
     try:
-        businessunits_raw = db.session.query(Businessunit).order_by(Businessunit.naam).all()
+        # Toon businessunits gesorteerd op ID, zodat de nieuwe volgorde duidelijk is
+        businessunits_raw = db.session.query(Businessunit).order_by(Businessunit.businessunit_id.asc()).all()
         businessunits = [{'businessunit_id': bu.businessunit_id, 'naam': bu.naam} for bu in businessunits_raw]
     except Exception as e:
         print(f"admin_businessunits_page error: {e}")
@@ -1180,7 +1220,12 @@ def admin_create_businessunit():
             flash('Businessunit bestaat al', 'info')
             return redirect(url_for('main.admin_businessunits_page'))
 
-        new_bu = Businessunit(naam=naam)
+        # Omdat de PK in de database geen automatische sequence heeft,
+        # bepalen we hier handmatig het volgende ID (max + 1).
+        max_id = db.session.query(db.func.max(Businessunit.businessunit_id)).scalar() or 0
+        new_id = max_id + 1
+
+        new_bu = Businessunit(businessunit_id=new_id, naam=naam)
         db.session.add(new_bu)
         db.session.commit()
         flash('Businessunit toegevoegd', 'success')
@@ -1380,6 +1425,7 @@ def klacht_bewerken(klacht_id):
         # Haal form data op
         order_nummer = request.form.get('order_nummer', '').strip()
         artikelnummer = request.form.get('artikelnummer', '').strip()
+        artikel_naam = request.form.get('artikel_naam', '').strip()
         aantal_eenheden = request.form.get('aantal_eenheden', '').strip()
         categorie_id = request.form.get('categorie_id', '').strip()
         mogelijke_oorzaak = request.form.get('mogelijke_oorzaak', '').strip()
@@ -1438,7 +1484,9 @@ def klacht_bewerken(klacht_id):
                         existing_bijlages.append(uploaded)
 
         # Ensure referenced artikel/order rows exist
-        artikelnummer = services.ensure_product_exists(artikelnummer, None)
+        # Als het artikelnummer nog niet bestaat en er is een artikelnaam opgegeven,
+        # wordt hier een nieuw product met die naam aangemaakt.
+        artikelnummer = services.ensure_product_exists(artikelnummer, artikel_naam or None)
         order_nummer = services.ensure_order_exists(order_nummer, klant_id_existing)
 
         # Serialize bijlages
@@ -1597,10 +1645,17 @@ def klachten_export():
                     return ''
             return v or ''
 
+        # Sorteer klachten op klacht_id (oplopend) voor export
+        try:
+            klachten = sorted(klachten, key=lambda k: (k.get('klacht_id') or 0))
+        except Exception as e_sort:
+            print(f"Warning export: could not sort by klacht_id: {e_sort}")
+
         # Build Excel workbook
         wb = Workbook()
         ws = wb.active
         ws.title = "Klachten"
+        # Let op: bijlages/foto's worden niet meer meegenomen in de export
         header = [
             'Klacht ID',
             'Verantwoordelijke ID',
@@ -1619,13 +1674,11 @@ def klachten_export():
             'Datum melding',
             'Businessunit',
             'Ondernemingsnummer',
-            'Bijlagen (URL)',
-            'Eerste afbeelding'
         ]
         ws.append(header)
 
-        # set column widths for readability
-        widths = [12, 18, 24, 12, 24, 16, 16, 14, 12, 18, 16, 32, 32, 12, 16, 16, 18, 40, 18]
+        # set column widths for readability (aantal kolommen moet overeenkomen met header)
+        widths = [12, 18, 24, 12, 24, 16, 16, 14, 12, 18, 16, 32, 32, 12, 16, 16, 18]
         for i, w in enumerate(widths, start=1):
             ws.column_dimensions[chr(64 + i)].width = w
 
@@ -1654,19 +1707,6 @@ def klachten_export():
                 if not cat_type and cat_id in categorie_map:
                     cat_type = categorie_map[cat_id]
                 prioriteit = k.get('prioriteit')
-                
-                bijlage_urls = []
-                first_image_bytes = None
-                
-                # normalize_bijlages geeft een lijst van dicts terug met de URL, naam, is_image
-                for bijlage in normalize_bijlages(k.get('bijlages')):
-                    b_url = bijlage.get('url')
-                    if b_url:
-                        bijlage_urls.append(b_url)
-                        if not first_image_bytes:
-                            # Gebruik de is_image flag die we in normalize_bijlages hebben gezet
-                            if bijlage.get('is_image'):
-                                first_image_bytes = fetch_image_bytes(b_url)
 
                 row = [
                     klacht_id,
@@ -1686,22 +1726,9 @@ def klachten_export():
                     k.get('datum_melding') or '',
                     k.get('businessunit') or services.get_businessunit_name(k.get('businessunit_id')) or '',
                     ondernemingsnummer or k.get('ondernemingsnummer') or '',
-                    "\n".join(bijlage_urls),
-                    ''
                 ]
                 ws.append(row)
 
-                # embed first image if available
-                if first_image_bytes:
-                    try:
-                        img = XLImage(io.BytesIO(first_image_bytes))
-                        img.height = 80
-                        img.width = 80
-                        cell_ref = f"Q{idx}"
-                        ws.add_image(img, cell_ref)
-                        ws.row_dimensions[idx].height = 70
-                    except Exception as ie:
-                        print(f"Embed image failed for klacht {klacht_id}: {ie}")
             except Exception as e:
                 print(f"Warning: failed to write row for klacht {k.get('klacht_id')}: {e}")
 

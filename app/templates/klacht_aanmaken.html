@@ -48,33 +48,13 @@
                         <label for="klant_naam" class="required">Klant</label>
                         <input type="text" name="klant_naam" id="klant_naam" list="klanten_datalist" placeholder="Begin met typen..." value="{{ request.form.get('klant_naam','') }}" required>
                         <input type="hidden" name="klant_id" id="klant_id" value="{{ request.form.get('klant_id','') }}">
-                        <input type="hidden" name="is_new_customer" id="is_new_customer" value="{{ request.form.get('is_new_customer','false') }}">
+                        <input type="hidden" name="is_new_customer" id="is_new_customer" value="false">
                         <datalist id="klanten_datalist">
                             {% for klant in klanten %}
                                 <option value="{{ klant.klantnaam }}" data-id="{{ klant.klant_id }}"></option>
                             {% endfor %}
                         </datalist>
-                        <div class="hint">
-                            Niet gevonden? <button type="button" id="start_new_customer" class="link-button">Nieuwe klant aanmaken</button>
-                        </div>
-                        <div id="new_customer_section" class="new-customer" style="display:none; margin-top:8px;">
-                            <div class="form-group">
-                                <label for="klant_ondernemingsnummer" class="required">Ondernemingsnummer</label>
-                                <input type="text" name="klant_ondernemingsnummer" id="klant_ondernemingsnummer" placeholder="bv. 0123456789" value="{{ request.form.get('klant_ondernemingsnummer','') }}">
-                            </div>
-                            <div class="form-group">
-                                <label for="klant_email">E-mail (optioneel)</label>
-                                <input type="email" name="klant_email" id="klant_email" placeholder="klant@example.com" value="{{ request.form.get('klant_email','') }}">
-                            </div>
-                            <div class="form-group">
-                                <label for="klant_contact">Contactpersoon (optioneel)</label>
-                                <input type="text" name="klant_contact" id="klant_contact" placeholder="Naam contactpersoon" value="{{ request.form.get('klant_contact','') }}">
-                            </div>
-                            <div class="form-group">
-                                <label for="klant_adres">Adres (optioneel)</label>
-                                <input type="text" name="klant_adres" id="klant_adres" placeholder="Straat, nr, gemeente" value="{{ request.form.get('klant_adres','') }}">
-                            </div>
-                        </div>
+                        <!-- Sectie voor nieuwe klant (ondernemingsnummer t.e.m. adres) verwijderd op verzoek -->
                     </div>
 
                     <div class="form-group full-width">
@@ -169,10 +149,8 @@
         const klantNaamInput = document.getElementById('klant_naam');
         const klantIdHidden = document.getElementById('klant_id');
         const klantDatalist = document.getElementById('klanten_datalist');
-        const newCustomerSection = document.getElementById('new_customer_section');
+        const newCustomerSection = null;
         const isNewCustomerInput = document.getElementById('is_new_customer');
-        const klantOndernemingsInput = document.getElementById('klant_ondernemingsnummer');
-        const newCustomerToggle = document.getElementById('start_new_customer');
         const klachtOmschrijvingInput = document.getElementById('reden_afwijzing');
         const mogelijkeOorzaakInput = document.getElementById('mogelijke_oorzaak');
         const categorieSelect = document.getElementById('categorie_id');
@@ -272,9 +250,9 @@
         }
 
         function setNewCustomerMode(enabled) {
-            if (!newCustomerSection || !isNewCustomerInput) return;
-            isNewCustomerInput.value = enabled ? 'true' : 'false';
-            newCustomerSection.style.display = enabled ? 'block' : 'none';
+            if (!isNewCustomerInput) return;
+            // Nieuwe klanten aanmaken via dit formulier is uitgeschakeld
+            isNewCustomerInput.value = 'false';
         }
 
         function syncKlantSelection() {
@@ -282,10 +260,8 @@
             const match = Array.from(klantDatalist.options).find(opt => opt.value === klantNaamInput.value);
             if (match) {
                 klantIdHidden.value = match.dataset.id || '';
-                setNewCustomerMode(false);
             } else {
                 klantIdHidden.value = '';
-                setNewCustomerMode(true);
             }
         }
 
@@ -307,7 +283,6 @@
 
         form.addEventListener('submit', function(e) {
             let isValid = true;
-            const newCustomer = isNewCustomerInput && isNewCustomerInput.value === 'true';
             requiredFields.forEach(field => {
                 if (!field.value) {
                     field.style.borderColor = '#e63946';
@@ -316,19 +291,11 @@
             });
             if (klantNaamInput && klantDatalist) {
                 const match = Array.from(klantDatalist.options).find(opt => opt.value === klantNaamInput.value);
-                if (!newCustomer && !match) {
+                if (!match) {
                     isValid = false;
-                    alert('Kies een klant uit de lijst of maak een nieuwe klant aan.');
-                }
-                if (!newCustomer && match) {
+                    alert('Kies een klant uit de lijst.');
+                } else {
                     klantIdHidden.value = match.dataset.id || '';
-                }
-                if (newCustomer) {
-                    klantIdHidden.value = '';
-                    if (!klantNaamInput.value || !klantOndernemingsInput || !klantOndernemingsInput.value) {
-                        isValid = false;
-                        alert('Vul klantnaam en ondernemingsnummer in voor een nieuwe klant.');
-                    }
                 }
             }
             if (!isValid) {
@@ -340,9 +307,6 @@
         if (klantNaamInput) {
             klantNaamInput.addEventListener('change', syncKlantSelection);
             klantNaamInput.addEventListener('blur', syncKlantSelection);
-        }
-        if (newCustomerToggle) {
-            newCustomerToggle.addEventListener('click', () => setNewCustomerMode(true));
         }
         // Init state
         syncKlantSelection();
