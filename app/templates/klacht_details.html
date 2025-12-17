@@ -11,6 +11,20 @@
         <h1>Klacht Details #{{ klacht_id }} - Rol: {{ session.get('user_rol') }}</h1>
     </div>
 
+    <div class="flash-messages">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    {% if category == 'success' %}
+                        <div class="alert alert-{{ category }}">{{ message }}</div>
+                    {% else %}
+                        <div class="alert alert-{{ category }}" style="display:none;">{{ message }}</div>
+                    {% endif %}
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+    </div>
+
     <form method="POST" action="{{ url_for('main.klacht_bewerken', klacht_id=klacht_id) }}" enctype="multipart/form-data">
         <div class="details-card">
             <div class="detail-row">
@@ -39,9 +53,16 @@
             <div class="detail-row">
                 <div class="detail-label">Klant:</div>
                 <div class="detail-value">
-                    <div class="readonly-field">
+                    <div class="readonly-field" style="margin-bottom:8px;">
                         {% if klacht.klant %}{{ klacht.klant.klantnaam }} (ID: {{ klacht.klant_id }}){% else %}Klant ID: {{ klacht.klant_id }}{% endif %}
                     </div>
+                    <input type="text" name="klant_naam" id="klant_naam" list="klanten_datalist" value="{{ klacht.klant.klantnaam if klacht.klant else '' }}" class="edit-input" placeholder="Klant wordt auto-ingevuld bij orderselectie" required>
+                    <input type="hidden" name="klant_id" id="klant_id" value="{{ klacht.klant_id or '' }}">
+                    <datalist id="klanten_datalist">
+                        {% for klant in klanten %}
+                            <option value="{{ klant.klantnaam }}" data-id="{{ klant.klant_id }}"></option>
+                        {% endfor %}
+                    </datalist>
                 </div>
             </div>
             <div class="detail-row">
@@ -166,22 +187,28 @@
             <div class="detail-row">
                 <div class="detail-label">Ordernummer:</div>
                 <div class="detail-value">
-                    <input type="text" name="order_nummer" value="{{ klacht.order_nummer or '' }}" class="edit-input" placeholder="Voer ordernummer in" required>
+                    <input type="text" name="order_nummer" id="order_nummer" list="orders_datalist" value="{{ klacht.order_nummer or '' }}" class="edit-input" placeholder="Kies ordernummer" required>
+                    <datalist id="orders_datalist">
+                        {% for order in orders %}
+                            <option value="{{ order.order_nummer }}" data-klantid="{{ order.klant_id or '' }}" data-klantnaam="{{ order.klantnaam or '' }}"></option>
+                        {% endfor %}
+                    </datalist>
                 </div>
             </div>
 
             <div class="detail-row">
                 <div class="detail-label">Artikelnummer:</div>
                 <div class="detail-value">
-                    <input type="text" name="artikelnummer" value="{{ klacht.artikelnummer or '' }}" class="edit-input" placeholder="Voer artikelnummer in" required>
+                    <input type="text" name="artikelnummer" id="artikelnummer" list="producten_datalist" value="{{ klacht.artikelnummer or '' }}" class="edit-input" placeholder="Kies artikelnummer" required>
+                    <datalist id="producten_datalist">
+                        {% for product in producten %}
+                            <option value="{{ product.artikel_nr }}" label="{{ product.naam }}" data-name="{{ product.naam }}"></option>
+                        {% endfor %}
+                    </datalist>
                 </div>
             </div>
-            <div class="detail-row">
-                <div class="detail-label">Artikelnaam (voor nieuwe nummers):</div>
-                <div class="detail-value">
-                    <input type="text" name="artikel_naam" value="{{ klacht.artikel_naam or '' }}" class="edit-input" placeholder="Optioneel: artikelnaam">
-                </div>
-            </div>
+
+            <!-- Artikelnaam removed: only existing artikelnummers allowed -->
 
             <div class="detail-row">
                 <div class="detail-label">Aantal eenheden:</div>
@@ -256,6 +283,57 @@
 </div>
 
 <script>
+    // Display flash messages as popups
+    document.addEventListener('DOMContentLoaded', function() {
+        const flashMessages = document.querySelectorAll('.alert');
+        flashMessages.forEach(function(msg) {
+            const text = msg.textContent.trim();
+            const isSuccess = msg.classList.contains('alert-success');
+            // Show non-success messages as popups; keep 'success' visible in-page
+            if (text && !isSuccess) {
+                alert(text);
+            }
+        });
+    });
+
+    function syncOrderSelection() {
+        const orderInput = document.getElementById('order_nummer');
+        const orderDatalist = document.getElementById('orders_datalist');
+        const klantNaamInput = document.getElementById('klant_naam');
+        const klantIdHidden = document.getElementById('klant_id');
+        
+        if (!orderInput || !orderDatalist || !klantNaamInput || !klantIdHidden) return false;
+
+        const match = Array.from(orderDatalist.options).find(opt => String(opt.value) === String(orderInput.value));
+        if (match) {
+            // Auto-fill klant fields from the selected order (no immediate popup)
+            const kid = match.dataset.klantid || '';
+            const kname = match.dataset.klantnaam || '';
+            klantIdHidden.value = kid;
+            if (klantNaamInput) {
+                klantNaamInput.value = kname;
+            }
+            return true;
+        } else {
+            // If no matching order, clear klant selection
+            klantIdHidden.value = '';
+            return false;
+        }
+    }
+
+    function handleKlantChange() {
+        const klantNaamInput = document.getElementById('klant_naam');
+        const klantIdHidden = document.getElementById('klant_id');
+        const klantDatalist = document.getElementById('klanten_datalist');
+        if (!klantNaamInput || !klantIdHidden || !klantDatalist) return;
+
+        const matchKlant = Array.from(klantDatalist.options).find(opt => opt.value === klantNaamInput.value);
+        const formKlantId = matchKlant ? (matchKlant.dataset.id || '') : '';
+
+        // Accept the klant selection now; any mismatch with the order will be validated on submit
+        klantIdHidden.value = formKlantId || '';
+    }
+
     function toggleDelete(bijlageId, forceUndo) {
         const row = document.getElementById('bijlage-row-' + bijlageId);
         if (!row) return;
@@ -282,16 +360,84 @@
     (function() {
         const form = document.querySelector('form[enctype="multipart/form-data"]');
         const statusSelect = document.getElementById('status_select');
+        const orderInput = document.getElementById('order_nummer');
+        const orderDatalist = document.getElementById('orders_datalist');
+        const artikelInput = document.getElementById('artikelnummer');
+        const productenDatalist = document.getElementById('producten_datalist');
+        const klantNaamInput = document.getElementById('klant_naam');
+        const klantIdHidden = document.getElementById('klant_id');
+        const klantDatalist = document.getElementById('klanten_datalist');
+        
         if (!form) return;
+        
+        // Add event listener for order selection to auto-fill klant
+        if (orderInput) {
+            orderInput.addEventListener('change', syncOrderSelection);
+            orderInput.addEventListener('blur', syncOrderSelection);
+        }
+
+        function syncKlantSelection() {
+            if (!klantNaamInput || !klantDatalist || !klantIdHidden) return;
+            const match = Array.from(klantDatalist.options).find(opt => opt.value === klantNaamInput.value);
+            if (match) {
+                klantIdHidden.value = match.dataset.id || '';
+            } else {
+                klantIdHidden.value = '';
+            }
+        }
+
+        if (klantNaamInput) {
+            klantNaamInput.addEventListener('change', syncKlantSelection);
+            klantNaamInput.addEventListener('blur', syncKlantSelection);
+        }
+        
         form.addEventListener('submit', function(e) {
+            let isValid = true;
+            
             const hidden = document.getElementById('deleted_bijlages');
             if (hidden && hidden.value) {
                 const confirmed = confirm('Er zijn bijlagen gemarkeerd om te verwijderen. Doorgaan?');
                 if (!confirmed) { e.preventDefault(); return false; }
             }
+            
+            // Order must match existing
+            if (orderInput && orderDatalist && orderInput.value) {
+                const matchOrder = Array.from(orderDatalist.options).find(opt => String(opt.value) === String(orderInput.value));
+                if (!matchOrder) {
+                    isValid = false;
+                    alert('Kies een bestaand ordernummer uit de lijst.');
+                }
+            }
+            
+            // Artikel must match existing
+            if (artikelInput && productenDatalist && artikelInput.value) {
+                const matchArt = Array.from(productenDatalist.options).find(opt => String(opt.value) === String(artikelInput.value));
+                if (!matchArt) {
+                    isValid = false;
+                    alert('Kies een bestaand artikelnummer uit de lijst.');
+                }
+            }
+
+            // Klant must match klant of the selected order (if klant provided)
+            if (orderInput && orderDatalist && orderInput.value && klantIdHidden && klantIdHidden.value) {
+                const matchOrder = Array.from(orderDatalist.options).find(opt => String(opt.value) === String(orderInput.value));
+                if (matchOrder) {
+                    const orderKlantId = matchOrder.dataset.klantid || '';
+                    if (orderKlantId && String(orderKlantId) !== String(klantIdHidden.value)) {
+                        isValid = false;
+                        alert('Geselecteerde klant komt niet overeen met klant van het ordernummer. Kies een klant die bij het order hoort.');
+                    }
+                }
+            }
+            
             if (statusSelect && statusSelect.value === 'Afgewezen') {
                 const sure = confirm('Zeker dat je deze klacht wilt afwijzen?');
                 if (!sure) { e.preventDefault(); return false; }
+            }
+            
+            if (!isValid) {
+                e.preventDefault();
+                return false;
             }
         });
     })();

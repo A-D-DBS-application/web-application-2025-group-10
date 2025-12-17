@@ -632,6 +632,34 @@ def klacht_details(klacht_id):
         # Categorieën voor dropdown
         categorieen = get_categorieen_list()
 
+        # Klanten, orders en producten voor datalists
+        klanten = []
+        try:
+            klanten_all = services.get_all_klanten()
+            klanten = [{'klant_id': k.klant_id, 'klantnaam': k.klantnaam} for k in klanten_all]
+        except Exception as e:
+            print(f"Error bij ophalen klanten: {e}")
+            klanten = []
+
+        try:
+            orders_all = services.get_all_orders()
+            orders = []
+            for o in orders_all:
+                try:
+                    klantnaam = None
+                    if getattr(o, 'klant_id', None):
+                        k = services.get_klant_by_id(o.klant_id)
+                        klantnaam = k.klantnaam if k else ''
+                except Exception:
+                    klantnaam = ''
+                orders.append({'order_nummer': o.order_nummer, 'klant_id': o.klant_id, 'klantnaam': klantnaam})
+            producten_all = services.get_all_products()
+            producten = [{'artikel_nr': p.artikel_nr, 'naam': p.naam} for p in producten_all]
+        except Exception as e:
+            print(f"Error bij ophalen orders/producten: {e}")
+            orders = []
+            producten = []
+
         # Vertegenwoordigers voor toewijzing (alleen Admin/Key user)
         vertegenw = []
         current_role = normalized_role()
@@ -654,6 +682,9 @@ def klacht_details(klacht_id):
             categorieen=categorieen,
             statushistoriek=statushistoriek,
             vertegenw=vertegenw,
+            klanten=klanten,
+            orders=orders,
+            producten=producten,
             businessunits=get_businessunits_list(),
             status_options=get_status_options()
         )
@@ -1530,6 +1561,8 @@ def klacht_bewerken(klacht_id):
         order_nummer = request.form.get('order_nummer', '').strip()
         artikelnummer = request.form.get('artikelnummer', '').strip()
         artikel_naam = request.form.get('artikel_naam', '').strip()
+        klant_id_form = request.form.get('klant_id', '').strip()
+        klant_naam_form = request.form.get('klant_naam', '').strip()
         aantal_eenheden = request.form.get('aantal_eenheden', '').strip()
         categorie_id = request.form.get('categorie_id', '').strip()
         mogelijke_oorzaak = request.form.get('mogelijke_oorzaak', '').strip()
@@ -1548,6 +1581,34 @@ def klacht_bewerken(klacht_id):
         if not categorie_check:
             flash('Ongeldige categorie geselecteerd', 'error')
             return redirect(url_for('main.klacht_details', klacht_id=klacht_id))
+
+        # Valideer dat order en product bestaan (strikte controle: geen automatische creatie)
+        order_obj = services.get_order_by_nummer(order_nummer)
+        product_obj = services.get_product_by_artikelnummer(artikelnummer)
+        if not order_obj:
+            flash('Ordernummer niet gevonden. Kies een bestaand ordernummer uit de lijst.', 'error')
+            return redirect(url_for('main.klacht_details', klacht_id=klacht_id))
+        if not product_obj:
+            flash('Artikelnummer niet gevonden. Kies een bestaand artikelnummer uit de lijst.', 'error')
+            return redirect(url_for('main.klacht_details', klacht_id=klacht_id))
+
+        # Controleer consistentie tussen geselecteerde klant (form) en klant van het order
+        try:
+            order_klant_id = getattr(order_obj, 'klant_id', None)
+            # Als gebruiker expliciet een klant meestuurt in het formulier, mag deze alleen geaccepteerd worden
+            # wanneer die overeenkomt met de klant van het geselecteerde order.
+            if klant_id_form:
+                if order_klant_id is not None and str(order_klant_id) != str(klant_id_form):
+                    flash('Geselecteerde klant komt niet overeen met klant van het ordernummer. Kies een klant die bij het order hoort.', 'error')
+                    return redirect(url_for('main.klacht_details', klacht_id=klacht_id))
+
+            # Ongeacht of de client klant_id meestuurt: als het order hoort bij een andere klant dan
+            # de klacht momenteel heeft, update de klacht en toon een info-melding (dit gebeurt bij opslaan).
+            if order_klant_id is not None and str(order_klant_id) != str(klacht.klant_id):
+                klacht.klant_id = int(order_klant_id)
+                flash('Klant aangepast naar klant behorend bij het geselecteerde order.', 'info')
+        except Exception as e:
+            print(f"Warning: kon klant niet controleren/automatisch bijwerken op basis van order: {e}")
 
         # Haal bestaande bijlages
         existing_bijlages_raw = klacht.bijlages
@@ -1588,10 +1649,8 @@ def klacht_bewerken(klacht_id):
                         existing_bijlages.append(uploaded)
 
         # Ensure referenced artikel/order rows exist
-        # Als het artikelnummer nog niet bestaat en er is een artikelnaam opgegeven,
-        # wordt hier een nieuw product met die naam aangemaakt.
-        artikelnummer = services.ensure_product_exists(artikelnummer, artikel_naam or None)
-        order_nummer = services.ensure_order_exists(order_nummer, klant_id_existing)
+        # REMOVED: no longer automatically creates missing products/orders
+        # Only use the artikel/order if they already exist (validated above)
 
         # Serialize bijlages
         serialized_bijlages = serialize_bijlages_for_db(existing_bijlages if existing_bijlages else None)
