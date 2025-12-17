@@ -757,15 +757,30 @@ def klacht_aanmaken():
         flash('Toegang geweigerd', 'error')
         return redirect(url_for('main.login'))
     
-    # Haal klanten en categorieën op voor dropdowns
+    # Haal klanten, orders, producten en categorieën op voor dropdowns
     try:
         klanten_all = services.get_all_klanten()
         klanten = [{'klant_id': k.klant_id, 'klantnaam': k.klantnaam} for k in klanten_all]
         categorieen = get_categorieen_list()
+        orders_all = services.get_all_orders()
+        orders = []
+        for o in orders_all:
+            try:
+                klantnaam = None
+                if getattr(o, 'klant_id', None):
+                    k = services.get_klant_by_id(o.klant_id)
+                    klantnaam = k.klantnaam if k else ''
+            except Exception:
+                klantnaam = ''
+            orders.append({'order_nummer': o.order_nummer, 'klant_id': o.klant_id, 'klantnaam': klantnaam})
+        producten_all = services.get_all_products()
+        producten = [{'artikel_nr': p.artikel_nr, 'naam': p.naam} for p in producten_all]
     except Exception as e:
         print(f"Error bij ophalen data: {e}")
         klanten = []
         categorieen = []
+        orders = []
+        producten = []
 
     bu_prefill = safe_int(session.get('businessunit_id'))
     
@@ -786,7 +801,6 @@ def klacht_aanmaken():
             categorie_id = request.form.get('categorie_id', '').strip()
             order_nummer = request.form.get('order_nummer', '').strip()
             artikelnummer = request.form.get('artikelnummer', '').strip()
-            artikelnaam = request.form.get('artikel_naam', '').strip()
             aantal_eenheden = request.form.get('aantal_eenheden', '').strip()
             mogelijke_oorzaak = request.form.get('mogelijke_oorzaak', '').strip()
             klacht_omschrijving = request.form.get('reden_afwijzing', '').strip()
@@ -795,17 +809,57 @@ def klacht_aanmaken():
             businessunit = request.form.get('businessunit', '').strip() or (session.get('businessunit_naam') or '').strip()
             bu_id = services.resolve_or_create_businessunit(businessunit) if businessunit else None
             
-            # 1. Bepaal/Creëer Klant ID en Klantnaam
+            # 1. Bepaal Klant ID en Klantnaam - klant moet bestaan (geen automatische creatie)
             klant_naam_used = klant_naam
-            if not klant_id and klant_naam:
-                # Probeer klant_id op te lossen/creëren via ORM
-                klant = services.get_klant_by_name(klant_naam)
-                if klant:
-                    klant_id = klant.klant_id
-                else:
-                    klant = services.create_klant(klant_naam)
+            if not klant_id:
+                if klant_naam:
+                    # Probeer klant_id op te lossen via ORM
+                    klant = services.get_klant_by_name(klant_naam)
                     if klant:
                         klant_id = klant.klant_id
+                    else:
+                        flash('Klant niet gevonden. Kies een bestaande klant uit de lijst.', 'error')
+                        # Zorg dat suggestion/categorie waarden behouden blijven
+                        suggested_categorie_type = suggest_categorie_safe(
+                            klacht_omschrijving,
+                            mogelijke_oorzaak,
+                            businessunit_id=safe_int(bu_id) if bu_id is not None else None
+                        )
+                        suggested_categorie_id = find_categorie_id_by_type(categorieen, suggested_categorie_type)
+                        selected_categorie_id = categorie_id or suggested_categorie_id
+                        return render_template(
+                            'klacht_aanmaken.html',
+                            user_naam=session.get('user_naam'),
+                            klanten=klanten,
+                            categorieen=categorieen,
+                            orders=orders,
+                            producten=producten,
+                            businessunits=get_businessunits_list(),
+                            suggested_categorie_id=suggested_categorie_id,
+                            suggested_categorie_type=suggested_categorie_type,
+                            selected_categorie_id=selected_categorie_id
+                        )
+                else:
+                    flash('Klant is verplicht. Kies een bestaande klant uit de lijst.', 'error')
+                    suggested_categorie_type = suggest_categorie_safe(
+                        klacht_omschrijving,
+                        mogelijke_oorzaak,
+                        businessunit_id=safe_int(bu_id) if bu_id is not None else None
+                    )
+                    suggested_categorie_id = find_categorie_id_by_type(categorieen, suggested_categorie_type)
+                    selected_categorie_id = categorie_id or suggested_categorie_id
+                    return render_template(
+                        'klacht_aanmaken.html',
+                        user_naam=session.get('user_naam'),
+                        klanten=klanten,
+                        categorieen=categorieen,
+                        orders=orders,
+                        producten=producten,
+                        businessunits=get_businessunits_list(),
+                        suggested_categorie_id=suggested_categorie_id,
+                        suggested_categorie_type=suggested_categorie_type,
+                        selected_categorie_id=selected_categorie_id
+                    )
             elif klant_id and not klant_naam:
                 # Haal de naam op als we alleen het ID hebben
                 klant = services.get_klant_by_id(klant_id)
@@ -878,9 +932,57 @@ def klacht_aanmaken():
             # Alleen datum (zonder uur)
             vandaag = date.today().isoformat()
 
-            # 4. Klacht aanmaken (EERST ZONDER BIJLAGES)
-            artikelnummer = services.ensure_product_exists(artikelnummer, artikelnaam)
-            order_nummer = services.ensure_order_exists(order_nummer, klant_id)
+            # 4. Valideer dat order en product bestaan (klachten alleen voor bestaande orders/artikelen)
+            order_obj = services.get_order_by_nummer(order_nummer)
+            product_obj = services.get_product_by_artikelnummer(artikelnummer)
+            if not order_obj:
+                flash('Ordernummer niet gevonden. Kies een bestaand ordernummer uit de lijst.', 'error')
+                return render_template(
+                    'klacht_aanmaken.html',
+                    user_naam=session.get('user_naam'),
+                    klanten=klanten,
+                    categorieen=categorieen,
+                    orders=orders,
+                    producten=producten,
+                    businessunits=get_businessunits_list(),
+                    suggested_categorie_id=suggested_categorie_id,
+                    suggested_categorie_type=suggested_categorie_type,
+                    selected_categorie_id=selected_categorie_id
+                )
+            # Controleer of de klant van het gekozen order overeenkomt met de opgegeven klant
+            try:
+                order_klant_id = getattr(order_obj, 'klant_id', None)
+                if order_klant_id is not None and klant_id:
+                    if str(order_klant_id) != str(klant_id):
+                        flash('Geselecteerde klant en ordernummer komen niet overeen.', 'error')
+                        return render_template(
+                            'klacht_aanmaken.html',
+                            user_naam=session.get('user_naam'),
+                            klanten=klanten,
+                            categorieen=categorieen,
+                            orders=orders,
+                            producten=producten,
+                            businessunits=get_businessunits_list(),
+                            suggested_categorie_id=suggested_categorie_id,
+                            suggested_categorie_type=suggested_categorie_type,
+                            selected_categorie_id=selected_categorie_id
+                        )
+            except Exception:
+                pass
+            if not product_obj:
+                flash('Artikelnummer niet gevonden. Kies een bestaand artikelnummer uit de lijst.', 'error')
+                return render_template(
+                    'klacht_aanmaken.html',
+                    user_naam=session.get('user_naam'),
+                    klanten=klanten,
+                    categorieen=categorieen,
+                    orders=orders,
+                    producten=producten,
+                    businessunits=get_businessunits_list(),
+                    suggested_categorie_id=suggested_categorie_id,
+                    suggested_categorie_type=suggested_categorie_type,
+                    selected_categorie_id=selected_categorie_id
+                )
             # Maak nieuwe klacht via ORM
             nieuwe_klacht = Klacht(
                 verantwoordelijke_id=safe_int(session['user_id']),
@@ -955,6 +1057,8 @@ def klacht_aanmaken():
         user_naam=session.get('user_naam'),
         klanten=klanten,
         categorieen=categorieen,
+        orders=orders,
+        producten=producten,
         businessunits=get_businessunits_list(),
         suggested_categorie_id=suggested_categorie_id,
         suggested_categorie_type=suggested_categorie_type,

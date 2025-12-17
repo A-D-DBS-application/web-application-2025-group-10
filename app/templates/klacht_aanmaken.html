@@ -59,18 +59,25 @@
 
                     <div class="form-group full-width">
                         <label for="order_nummer" class="required">Ordernummer</label>
-                        <input type="text" name="order_nummer" id="order_nummer" value="{{ request.form.get('order_nummer','') }}" required placeholder="Voer ordernummer in">
+                        <input type="text" name="order_nummer" id="order_nummer" list="orders_datalist" value="{{ request.form.get('order_nummer','') }}" required placeholder="Begin te typen en kies uit de lijst">
+                        <datalist id="orders_datalist">
+                            {% for order in orders %}
+                                <option value="{{ order.order_nummer }}" data-klantid="{{ order.klant_id or '' }}" data-klantnaam="{{ order.klantnaam or '' }}"></option>
+                            {% endfor %}
+                        </datalist>
                     </div>
 
                     <div class="form-group">
                         <label for="artikelnummer" class="required">Artikelnummer</label>
-                        <input type="text" name="artikelnummer" id="artikelnummer" value="{{ request.form.get('artikelnummer','') }}" required placeholder="Voer artikelnummer in">
+                        <input type="text" name="artikelnummer" id="artikelnummer" list="producten_datalist" value="{{ request.form.get('artikelnummer','') }}" required placeholder="Begin te typen en kies uit de lijst">
+                        <datalist id="producten_datalist">
+                            {% for product in producten %}
+                                <option value="{{ product.artikel_nr }}" label="{{ product.naam }}" data-name="{{ product.naam }}"></option>
+                            {% endfor %}
+                        </datalist>
                     </div>
 
-                    <div class="form-group">
-                        <label for="artikel_naam">Artikelnaam (voor nieuwe nummers)</label>
-                        <input type="text" name="artikel_naam" id="artikel_naam" value="{{ request.form.get('artikel_naam','') }}" placeholder="Omschrijving artikel (optioneel)">
-                    </div>
+                    <!-- Artikelnaam removed: only existing artikelnummers allowed -->
 
                     <div class="form-group">
                         <label for="aantal_eenheden" class="required">Aantal eenheden</label>
@@ -149,6 +156,10 @@
         const klantNaamInput = document.getElementById('klant_naam');
         const klantIdHidden = document.getElementById('klant_id');
         const klantDatalist = document.getElementById('klanten_datalist');
+        const orderInput = document.getElementById('order_nummer');
+        const orderDatalist = document.getElementById('orders_datalist');
+        const artikelInput = document.getElementById('artikelnummer');
+        const productenDatalist = document.getElementById('producten_datalist');
         const newCustomerSection = null;
         const isNewCustomerInput = document.getElementById('is_new_customer');
         const klachtOmschrijvingInput = document.getElementById('reden_afwijzing');
@@ -265,6 +276,30 @@
             }
         }
 
+        function syncOrderSelection() {
+            if (!orderInput || !orderDatalist || !klantNaamInput || !klantIdHidden) return false;
+            const match = Array.from(orderDatalist.options).find(opt => String(opt.value) === String(orderInput.value));
+            if (match) {
+                // Auto-fill klant fields from the selected order
+                const kid = match.dataset.klantid || '';
+                const kname = match.dataset.klantnaam || '';
+                klantIdHidden.value = kid;
+                if (klantNaamInput) {
+                    klantNaamInput.value = kname;
+                }
+                return true;
+            } else {
+                // If no matching order, clear klant selection
+                klantIdHidden.value = '';
+                if (klantNaamInput) {
+                    // leave manual input available
+                }
+                return false;
+            }
+        }
+
+        // Artikelnaam removed: only existing product numbers allowed; validation performed on submit
+
         requiredFields.forEach(field => {
             field.addEventListener('blur', function() {
                 this.style.borderColor = this.value ? '#10b981' : '#e63946';
@@ -298,6 +333,22 @@
                     klantIdHidden.value = match.dataset.id || '';
                 }
             }
+            // Order must match existing
+            if (orderInput && orderDatalist) {
+                const matchOrder = Array.from(orderDatalist.options).find(opt => String(opt.value) === String(orderInput.value));
+                if (!matchOrder) {
+                    isValid = false;
+                    alert('Kies een bestaand ordernummer uit de lijst.');
+                }
+            }
+            // Artikel must match existing
+            if (artikelInput && productenDatalist) {
+                const matchArt = Array.from(productenDatalist.options).find(opt => String(opt.value) === String(artikelInput.value));
+                if (!matchArt) {
+                    isValid = false;
+                    alert('Kies een bestaand artikelnummer uit de lijst.');
+                }
+            }
             if (!isValid) {
                 e.preventDefault();
                 alert('Gelieve alle verplichte velden in te vullen (aangegeven met *)');
@@ -308,8 +359,14 @@
             klantNaamInput.addEventListener('change', syncKlantSelection);
             klantNaamInput.addEventListener('blur', syncKlantSelection);
         }
+        if (orderInput) {
+            orderInput.addEventListener('change', syncOrderSelection);
+            orderInput.addEventListener('blur', syncOrderSelection);
+        }
         // Init state
         syncKlantSelection();
+        syncOrderSelection();
+        // no initial artikelnaam sync (field removed)
         if (isNewCustomerInput && isNewCustomerInput.value === 'true') {
             setNewCustomerMode(true);
         }

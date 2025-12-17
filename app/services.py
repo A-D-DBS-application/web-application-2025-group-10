@@ -259,6 +259,24 @@ def ensure_order_exists(order_nummer, klant_id=None):
         return order_nummer
 
 
+def get_all_orders():
+    """Haal alle orders op, gesorteerd op ordernummer."""
+    try:
+        return db.session.query(Order).order_by(Order.order_nummer).all()
+    except Exception as e:
+        print(f"Warning: get_all_orders failed: {e}")
+        return []
+
+
+def get_all_products():
+    """Haal alle producten op, gesorteerd op artikelnummer."""
+    try:
+        return db.session.query(Product).order_by(Product.artikel_nr).all()
+    except Exception as e:
+        print(f"Warning: get_all_products failed: {e}")
+        return []
+
+
 # ============================
 # PROBLEEMCATEGORIE SERVICES
 # ============================
