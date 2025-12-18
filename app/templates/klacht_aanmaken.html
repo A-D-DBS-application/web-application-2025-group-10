@@ -44,19 +44,6 @@
                         </select>
                     </div>
 
-                    <div class="form-group">
-                        <label for="klant_naam" class="required">Klant</label>
-                        <input type="text" name="klant_naam" id="klant_naam" list="klanten_datalist" placeholder="Begin met typen..." value="{{ request.form.get('klant_naam','') }}" required>
-                        <input type="hidden" name="klant_id" id="klant_id" value="{{ request.form.get('klant_id','') }}">
-                        <input type="hidden" name="is_new_customer" id="is_new_customer" value="false">
-                        <datalist id="klanten_datalist">
-                            {% for klant in klanten %}
-                                <option value="{{ klant.klantnaam }}" data-id="{{ klant.klant_id }}"></option>
-                            {% endfor %}
-                        </datalist>
-                        
-                    </div>
-
                     <div class="form-group full-width">
                         <label for="order_nummer" class="required">Ordernummer</label>
                         <input type="text" name="order_nummer" id="order_nummer" list="orders_datalist" value="{{ request.form.get('order_nummer','') }}" required placeholder="Begin te typen en kies uit de lijst">
@@ -65,6 +52,19 @@
                                 <option value="{{ order.order_nummer }}" data-klantid="{{ order.klant_id or '' }}" data-klantnaam="{{ order.klantnaam or '' }}"></option>
                             {% endfor %}
                         </datalist>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="klant_naam" class="required">Klant</label>
+                        <input type="text" name="klant_naam" id="klant_naam" list="klanten_datalist" placeholder="Wordt automatisch ingevuld na selectie ordernummer" value="{{ request.form.get('klant_naam','') }}" required readonly style="background-color: #f3f4f6; cursor: not-allowed;">
+                        <input type="hidden" name="klant_id" id="klant_id" value="{{ request.form.get('klant_id','') }}">
+                        <input type="hidden" name="is_new_customer" id="is_new_customer" value="false">
+                        <datalist id="klanten_datalist">
+                            {% for klant in klanten %}
+                                <option value="{{ klant.klantnaam }}" data-id="{{ klant.klant_id }}"></option>
+                            {% endfor %}
+                        </datalist>
+                        <small style="display: block; margin-top: 4px; color: #6b7280; font-size: 0.875rem;">Dit veld wordt automatisch ingevuld wanneer u een ordernummer selecteert</small>
                     </div>
 
                     <div class="form-group">
@@ -280,19 +280,21 @@
             if (!orderInput || !orderDatalist || !klantNaamInput || !klantIdHidden) return false;
             const match = Array.from(orderDatalist.options).find(opt => String(opt.value) === String(orderInput.value));
             if (match) {
-                
+                // Order gevonden: vul klant automatisch in
                 const kid = match.dataset.klantid || '';
                 const kname = match.dataset.klantnaam || '';
                 klantIdHidden.value = kid;
                 if (klantNaamInput) {
                     klantNaamInput.value = kname;
+                    klantNaamInput.style.borderColor = kname ? '#10b981' : '#e63946';
                 }
                 return true;
             } else {
-                
+                // Order niet gevonden: leeg klant veld
                 klantIdHidden.value = '';
                 if (klantNaamInput) {
-                    
+                    klantNaamInput.value = '';
+                    klantNaamInput.style.borderColor = '#e63946';
                 }
                 return false;
             }
@@ -324,24 +326,28 @@
                     isValid = false;
                 }
             });
-            if (klantNaamInput && klantDatalist) {
-                const match = Array.from(klantDatalist.options).find(opt => opt.value === klantNaamInput.value);
-                if (!match) {
-                    isValid = false;
-                    alert('Kies een klant uit de lijst.');
-                } else {
-                    klantIdHidden.value = match.dataset.id || '';
-                }
-            }
-            
+            // Valideer eerst ordernummer (moet eerst worden ingevuld)
             if (orderInput && orderDatalist) {
                 const matchOrder = Array.from(orderDatalist.options).find(opt => String(opt.value) === String(orderInput.value));
                 if (!matchOrder) {
                     isValid = false;
-                    alert('Kies een bestaand ordernummer uit de lijst.');
+                    alert('Kies eerst een bestaand ordernummer uit de lijst. De klant wordt automatisch ingevuld.');
+                    orderInput.focus();
+                } else {
+                    // Order is geldig, sync klant automatisch
+                    syncOrderSelection();
                 }
             }
-            g
+            
+            // Valideer klant (wordt automatisch ingevuld na order selectie)
+            if (klantNaamInput && klantIdHidden) {
+                if (!klantIdHidden.value || !klantNaamInput.value) {
+                    isValid = false;
+                    alert('Selecteer eerst een ordernummer. De klant wordt automatisch ingevuld.');
+                    if (orderInput) orderInput.focus();
+                }
+            }
+            
             if (artikelInput && productenDatalist) {
                 const matchArt = Array.from(productenDatalist.options).find(opt => String(opt.value) === String(artikelInput.value));
                 if (!matchArt) {
@@ -362,10 +368,12 @@
         if (orderInput) {
             orderInput.addEventListener('change', syncOrderSelection);
             orderInput.addEventListener('blur', syncOrderSelection);
+            orderInput.addEventListener('input', syncOrderSelection);
         }
         
-        syncKlantSelection();
+        // Initialiseer: sync order eerst, dan klant
         syncOrderSelection();
+        syncKlantSelection();
         
         if (isNewCustomerInput && isNewCustomerInput.value === 'true') {
             setNewCustomerMode(true);
