@@ -212,7 +212,7 @@
                 </div>
             </div>
 
-            <!-- Artikelnaam removed: only existing artikelnummers allowed -->
+            
 
             <div class="detail-row">
                 <div class="detail-label">Aantal eenheden:</div>
@@ -287,13 +287,13 @@
 </div>
 
 <script>
-    // Display flash messages as popups
+    // Popups
     document.addEventListener('DOMContentLoaded', function() {
         const flashMessages = document.querySelectorAll('.alert');
         flashMessages.forEach(function(msg) {
             const text = msg.textContent.trim();
             const isSuccess = msg.classList.contains('alert-success');
-            // Show non-success messages as popups; keep 'success' visible in-page
+            
             if (text && !isSuccess) {
                 alert(text);
             }
@@ -310,7 +310,7 @@
 
         const match = Array.from(orderDatalist.options).find(opt => String(opt.value) === String(orderInput.value));
         if (match) {
-            // Auto-fill klant fields from the selected order (no immediate popup)
+            // Auto-fill klant
             const kid = match.dataset.klantid || '';
             const kname = match.dataset.klantnaam || '';
             klantIdHidden.value = kid;
@@ -319,7 +319,7 @@
             }
             return true;
         } else {
-            // If no matching order, clear klant selection
+            
             klantIdHidden.value = '';
             return false;
         }
@@ -334,7 +334,7 @@
         const matchKlant = Array.from(klantDatalist.options).find(opt => opt.value === klantNaamInput.value);
         const formKlantId = matchKlant ? (matchKlant.dataset.id || '') : '';
 
-        // Accept the klant selection now; any mismatch with the order will be validated on submit
+        
         klantIdHidden.value = formKlantId || '';
     }
 
@@ -374,7 +374,7 @@
         
         if (!form) return;
         
-        // Add event listener for order selection to auto-fill klant
+        
         if (orderInput) {
             orderInput.addEventListener('change', syncOrderSelection);
             orderInput.addEventListener('blur', syncOrderSelection);
@@ -404,7 +404,7 @@
                 if (!confirmed) { e.preventDefault(); return false; }
             }
             
-            // Order must match existing
+            
             if (orderInput && orderDatalist && orderInput.value) {
                 const matchOrder = Array.from(orderDatalist.options).find(opt => String(opt.value) === String(orderInput.value));
                 if (!matchOrder) {
@@ -413,7 +413,7 @@
                 }
             }
             
-            // Artikel must match existing
+            
             if (artikelInput && productenDatalist && artikelInput.value) {
                 const matchArt = Array.from(productenDatalist.options).find(opt => String(opt.value) === String(artikelInput.value));
                 if (!matchArt) {
@@ -422,7 +422,7 @@
                 }
             }
 
-            // Klant must match klant of the selected order (if klant provided)
+            
             if (orderInput && orderDatalist && orderInput.value && klantIdHidden && klantIdHidden.value) {
                 const matchOrder = Array.from(orderDatalist.options).find(opt => String(opt.value) === String(orderInput.value));
                 if (matchOrder) {

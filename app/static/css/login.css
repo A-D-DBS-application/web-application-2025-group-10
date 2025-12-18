@@ -11,7 +11,7 @@ body.page-login {
 }
 
 .login-logo__img {
-    max-width: 320px; /* use max-width to scale up while staying responsive */
+    max-width: 320px; 
     width: 85vw;
     height: auto;
     display: block;

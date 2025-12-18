@@ -4,16 +4,16 @@ from datetime import datetime
 
 db = SQLAlchemy()
 
-# ============================
+
 # ENUM TYPES
-# ============================
+
 probleem_type_enum = ENUM('Technisch', 'Esthetisch', 'Service/Levering', 'Andere', name='probleem_type', create_type=False)
 klacht_status_enum = ENUM('Ingediend', 'Goedgekeurd', 'Afgewezen', 'In behandeling', 'Afgehandeld', name='klacht_status', create_type=False)
 gebruikersrol_enum = ENUM('Admin', 'Key user', 'User', name='gebruikersrol', create_type=False)
 
-# ============================
+
 # MODELS
-# ============================
+
 
 class Businessunit(db.Model):
     __tablename__ = 'businessunit'
@@ -109,7 +109,7 @@ class Klacht(db.Model):
     # Relatie naar product (via artikelnummer)
     product = db.relationship('Product', backref='klachten', lazy=True, foreign_keys=[artikelnummer])
     
-    # Relatie naar order (via order_nummer)
+    # Relatie naar order (via ordernummer)
     order = db.relationship('Order', backref='klachten', lazy=True, foreign_keys=[order_nummer])
     
     # Relatie naar businessunit

@@ -28,24 +28,24 @@ from .config import Config
 
 main = Blueprint('main', __name__)
 
-# Lokale file storage directory (fallback, niet meer gebruikt voor nieuwe uploads)
+# Plaats voor oude lokale bestanden (backup)
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt'}
 
-# Helper: Check Supabase configuratie
+# Controleer Supabase instellingen
 def check_supabase_config():
-    """Controleer of Supabase configuratie correct is."""
+    """Kijk of Supabase goed is ingesteld."""
     if not Config.SUPABASE_KEY or Config.SUPABASE_KEY.strip() == '':
-        print("ERROR: SUPABASE_KEY is niet ingesteld!")
+        print("FOUT: SUPABASE_KEY ontbreekt!")
         return False
     if not Config.SUPABASE_URL or Config.SUPABASE_URL.strip() == '':
-        print("ERROR: SUPABASE_URL is niet ingesteld!")
+        print("FOUT: SUPABASE_URL ontbreekt!")
         return False
     return True
 
-# Helper: Genereer publieke URL voor Supabase Storage
+# Maak publieke URL voor Supabase bestanden
 def get_supabase_public_url(storage_path):
-    """Genereer publieke URL voor bestand in Supabase Storage."""
+    """Geef publieke URL voor bestand in Supabase."""
     return f"{Config.SUPABASE_URL}/storage/v1/object/public/{Config.SUPABASE_STORAGE_BUCKET}/{storage_path}"
 
 
@@ -55,9 +55,8 @@ def index():
 
 @main.route('/uploads/<path:filename>')
 def uploaded_file(filename):
-    """Serve uploaded files (fallback voor oude lokale bestanden)."""
-    # Deze route is alleen voor backwards compatibility met oude lokale bestanden
-    # Nieuwe uploads gaan naar Supabase Storage en worden via publieke URLs geserveerd
+    """Geef oude lokale bestanden weer (backup voor oude uploads)."""
+    # Alleen voor oude bestanden, nieuwe gaan naar Supabase
     upload_path = ensure_upload_dir()
     return send_from_directory(upload_path, filename)
 
@@ -72,14 +71,15 @@ def login():
             return render_template('login.html')
         
         try:
-            # Zoek gebruiker via ORM (case-insensitive)
+            # Zoek gebruiker via database
             user = services.get_user_by_email(email.strip())
             
             if user:
                 stored_password = user.wachtwoord
 
+                # Controleer wachtwoord (gehasht of plain text)
                 if stored_password and check_password_hash(stored_password, password):
-                    # Login succesvol
+                    # Login gelukt
                     bu_id = user.businessunit_id
                     bu_naam = services.get_businessunit_name(bu_id) if bu_id else ''
                     session['user_id'] = user.gebruiker_id
@@ -89,7 +89,7 @@ def login():
                     session['businessunit_id'] = bu_id
                     session['businessunit_naam'] = bu_naam
 
-                    # Redirect naar rol-specifieke dashboard
+                    # Ga naar juiste dashboard
                     flash('Login succesvol!', 'success')
                     if session['user_rol'] == 'Admin':
                         return redirect(url_for('main.admin_dashboard'))
@@ -98,7 +98,7 @@ def login():
                     else:
                         return redirect(url_for('main.user_dashboard'))
 
-                # Als plain text (voor testing)
+                # Plain text wachtwoord (voor testen)
                 elif stored_password == password:
                     bu_id = user.businessunit_id
                     bu_naam = services.get_businessunit_name(bu_id) if bu_id else ''
@@ -119,13 +119,13 @@ def login():
                 else:
                     flash('Ongeldig wachtwoord', 'error')
             else:
-                # Debug: check of er überhaupt gebruikers in de database zijn
+                # Debug: controleer of er gebruikers zijn
                 try:
                     from .models import Gebruiker
                     user_count = db.session.query(Gebruiker).count()
-                    print(f"DEBUG: Total users in database: {user_count}")
+                    print(f"DEBUG: Aantal gebruikers in database: {user_count}")
                     if user_count == 0:
-                        flash('Geen gebruikers gevonden in database. Controleer database connectie.', 'error')
+                        flash('Geen gebruikers gevonden. Controleer database.', 'error')
                     else:
                         flash('Gebruiker niet gevonden', 'error')
                 except Exception as db_error:
@@ -161,30 +161,30 @@ def user_dashboard():
     else:
         return render_template('user_dashboard.html')
 
-# Helper: safely cast to int if possible
+# Veilig omzetten naar getal
 def safe_int(val):
     try:
         return int(val)
     except Exception:
         return val
 
-# Helper: ensure upload directory exists
+# Zorg dat upload map bestaat
 def ensure_upload_dir():
-    """Zorg dat upload directory bestaat."""
+    """Maak upload map aan als die nog niet bestaat."""
     upload_path = os.path.join(current_app.root_path, '..', UPLOAD_FOLDER)
     os.makedirs(upload_path, exist_ok=True)
     return upload_path
 
-# Helper: normalize businessunit from complaint object
+# Haal businessunit naam op
 def get_bu_value(obj):
-    """Haal businessunit naam op uit klacht object (ORM model of dict)."""
+    """Geef businessunit naam van klacht object."""
     if not obj:
         return ''
     if isinstance(obj, Klacht):
         if obj.businessunit:
             return obj.businessunit.naam
         return services.get_businessunit_name(obj.businessunit_id) if obj.businessunit_id else ''
-    # Legacy dict support
+    # Ondersteuning voor oude dict
     if obj.get('businessunit'):
         return str(obj.get('businessunit')).strip()
     bu_id = obj.get('businessunit_id')
@@ -192,12 +192,13 @@ def get_bu_value(obj):
         return services.get_businessunit_name(bu_id) or ''
     return ''
 
+# Check of klacht vandaag is aangemaakt
 def is_klacht_today(klacht, today_str=None):
-    """Check if a complaint was created/entered today."""
+    """Kijk of klacht vandaag is gemaakt."""
     today_str = today_str or date.today().isoformat()
     try:
         if isinstance(klacht, Klacht):
-            # ORM object
+            # Database object
             dm = klacht.datum_melding
             if dm:
                 if hasattr(dm, 'date'):
@@ -206,7 +207,7 @@ def is_klacht_today(klacht, today_str=None):
                     return str(dm)[:10] == today_str
             return False
         elif isinstance(klacht, dict):
-            # Dict support
+            # Dict ondersteuning
             dm = str(
                 klacht.get('datum_melding')
                 or klacht.get('created_at')
@@ -218,17 +219,17 @@ def is_klacht_today(klacht, today_str=None):
         else:
             return False
     except Exception as e:
-        print(f"Warning: is_klacht_today failed: {e}")
+        print(f"Waarschuwing: is_klacht_today faalde: {e}")
         return False
 
-# Helper: fetch image bytes (from URL or data:) for embedding in Excel
+# Haal afbeelding op voor Excel
 def fetch_image_bytes(url):
-    """Haal image bytes op voor Excel export."""
+    """Haal afbeelding bytes op voor Excel export."""
     if not url:
         return None
     try:
         if url.startswith('data:'):
-            # data URL: data:image/png;base64,... (LEGACY SUPPORT)
+            # data URL: data:image/png;base64,... (oude ondersteuning)
             if ';base64,' in url:
                 b64 = url.split(';base64,', 1)[1]
                 return base64.b64decode(b64)
@@ -242,10 +243,10 @@ def fetch_image_bytes(url):
                 if response.status_code == 200:
                     return response.content
             except Exception as e:
-                print(f"Error fetching from Supabase URL: {e}")
+                print(f"Fout bij ophalen Supabase URL: {e}")
             return None
         
-        # Lokale file URL: /uploads/... (fallback voor oude bestanden)
+        # Lokale bestand URL: /uploads/... (backup voor oude bestanden)
         if url.startswith('/uploads/') or url.startswith('uploads/'):
             upload_path = ensure_upload_dir()
             filename = url.split('/')[-1]
@@ -255,31 +256,34 @@ def fetch_image_bytes(url):
                     return f.read()
         return None
     except Exception as e:
-        print(f"fetch_image_bytes error: {e}")
+        print(f"fetch_image_bytes fout: {e}")
     return None
 
+# Haal alle businessunits op
 def get_businessunits_list():
-    """Haal alle businessunit namen op."""
+    """Geef lijst met alle businessunit namen."""
     return services.get_businessunits_list()
 
+# Haal alle categorieën op
 def get_categorieen_list():
-    """Haal categorie_id + type op."""
+    """Geef lijst met categorie_id + type."""
     return services.get_categorieen_list()
 
 
+# Haal alle status opties op
 def get_status_options():
-    """Alle mogelijke statuswaarden vanuit het model ENUM."""
+    """Geef alle mogelijke statuswaarden."""
     try:
         return list(klacht_status_enum.enums)
     except Exception as e:
-        print(f"Warning: kon status opties niet ophalen: {e}")
+        print(f"Waarschuwing: kon status opties niet ophalen: {e}")
         return []
 
 
+# Stel categorie voor
 def suggest_categorie_safe(omschrijving, oorzaak, businessunit_id=None):
     """
-    Probeer de contextuele suggestie (ORM) en val terug op de eenvoudige keyword-suggestie
-    als de database niet bereikbaar is.
+    Probeer categorie voor te stellen via database, val terug op simpele versie.
     """
     omschrijving = (omschrijving or "").strip()
     oorzaak = (oorzaak or "").strip()
@@ -292,12 +296,13 @@ def suggest_categorie_safe(omschrijving, oorzaak, businessunit_id=None):
             businessunit_id=businessunit_id,
         )
     except Exception as e:
-        print(f"Warning: suggest_probleemcategorie_contextual_sqlalchemy faalde, fallback naar simpele suggestie: {e}")
+        print(f"Waarschuwing: database suggestie faalde, gebruik simpele versie: {e}")
         return suggest_probleemcategorie(omschrijving, oorzaak)
 
 
+# Zoek categorie ID op basis van type
 def find_categorie_id_by_type(categorieen, categorie_type):
-    """Zoek de categorie_id op basis van het type; helper voor autosuggestie."""
+    """Vind categorie_id bij type; hulp voor autosuggestie."""
     if not categorie_type:
         return None
     for categorie in categorieen or []:
@@ -306,18 +311,17 @@ def find_categorie_id_by_type(categorieen, categorie_type):
             return categorie.get('categorie_id')
     return None
 
-# Normalizeert de DB-string van URL's naar de structuur die de template verwacht.
+# Maak bijlagen netjes voor template
 def normalize_bijlages(raw_bijlages):
     """
-    Converteert de opgeslagen waarde (TEXT met newline-gescheiden URL's)
-    naar een lijst van dicts voor de template.
+    Zet opgeslagen tekst (URL's met newlines) om naar lijst van dicts.
     """
     if not raw_bijlages:
         return []
     
     urls = []
     
-    # Behandel de opgeslagen string (newline-gescheiden URL's)
+    # Behandel opgeslagen tekst (URL's gescheiden door newlines)
     if isinstance(raw_bijlages, str):
         urls.extend([u.strip() for u in raw_bijlages.splitlines() if u.strip()])
     elif isinstance(raw_bijlages, list):
@@ -327,7 +331,7 @@ def normalize_bijlages(raw_bijlages):
             elif isinstance(b, str):
                 urls.append(b)
                 
-    # Filter op unieke, geldige URL-strings en converteer naar template-dicts
+    # Filter unieke URL's en maak dicts voor template
     normalized = []
     unique_urls = set()
     for url in urls:
@@ -336,19 +340,17 @@ def normalize_bijlages(raw_bijlages):
         unique_urls.add(url)
         
         url_lower = url.lower()
-        # Check of het een image is: data URL, extensie, of Supabase URL met image extensie
+        # Check of het een afbeelding is
         is_img = (url.startswith('data:image') or 
                  url_lower.endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')) or
                  ('supabase' in url_lower and any(ext in url_lower for ext in ['.png', '.jpg', '.jpeg', '.gif', '.webp'])))
         
-        # Extract bestandsnaam uit URL
+        # Haal bestandsnaam uit URL
         if '/' in url:
             naam = url.split("/")[-1]
-            # Als Supabase URL, probeer bestandsnaam uit path te halen
+            # Voor Supabase URL, haal bestandsnaam uit pad
             if 'supabase' in url_lower and '/' in url:
-                # Format: .../public/bucket/path/to/filename.ext
                 parts = url.split('/')
-                # Zoek naar het laatste deel met een extensie
                 for part in reversed(parts):
                     if any(part.lower().endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.pdf']):
                         naam = part
@@ -365,8 +367,9 @@ def normalize_bijlages(raw_bijlages):
         
     return normalized
 
+# Sla bijlagen op als tekst
 def serialize_bijlages_for_db(bijlage_list):
-    """Sla op als newline-gescheiden URL's (eenvoudige TEXT-opslag)."""
+    """Sla bijlagen op als newline-gescheiden URL's."""
     if not bijlage_list:
         return None
     try:
@@ -380,20 +383,21 @@ def serialize_bijlages_for_db(bijlage_list):
     except Exception:
         return None
 
+# Zet database klacht om naar dict
 def klacht_to_dict(klacht):
-    """Converteer Klacht ORM object naar dict voor templates."""
+    """Converteer Klacht database object naar dict voor templates."""
     if not klacht:
         return {}
     if isinstance(klacht, dict):
-        # Al een dict, gebruik normalize voor legacy support
+        # Al een dict, gebruik normalize voor oude ondersteuning
         k = dict(klacht)
-        # Zorg dat datum_melding een string is als het een datetime object is
+        # Zorg dat datum_melding string is als het datetime object is
         if k.get('datum_melding') and hasattr(k['datum_melding'], 'isoformat'):
             k['datum_melding'] = k['datum_melding'].isoformat()
         if k.get('datum_laatst_bewerkt') and hasattr(k['datum_laatst_bewerkt'], 'isoformat'):
             k['datum_laatst_bewerkt'] = k['datum_laatst_bewerkt'].isoformat()
     else:
-        # ORM object, converteer naar dict
+        # Database object, converteer naar dict
         k = {
             'klacht_id': klacht.klacht_id,
             'verantwoordelijke_id': klacht.verantwoordelijke_id,
@@ -412,7 +416,7 @@ def klacht_to_dict(klacht):
             'datum_laatst_bewerkt': klacht.datum_laatst_bewerkt.isoformat() if klacht.datum_laatst_bewerkt else None,
             'businessunit_id': klacht.businessunit_id,
         }
-        # Relaties (veilig toegang met getattr)
+        # Relaties (veilig opvragen)
         try:
             if hasattr(klacht, 'verantwoordelijke') and klacht.verantwoordelijke:
                 k['verantwoordelijke'] = {'naam': klacht.verantwoordelijke.naam}
@@ -437,7 +441,7 @@ def klacht_to_dict(klacht):
         except Exception:
             pass
     
-    # Legacy field mappings voor templates
+    # Oude veldnamen voor templates
     k['vertegenwoordiger_id'] = k.get('verantwoordelijke_id')
     k['reden_afwijzing'] = k.get('klacht_omschrijving')
     k['opmerking'] = k.get('opmerking_status_wijziging')
@@ -458,11 +462,11 @@ def user_klachten():
     role = normalized_role()
     sort_order = request.args.get('sort_order', 'nieuwste')
     try:
-        # Haal klachten op via ORM met eager loading van relaties
+        # Haal klachten op via database
         user_id = safe_int(session['user_id'])
         bu_id = session.get('businessunit_id')
         
-        # Eager load relaties om N+1 queries te voorkomen
+        # Laad relaties in één keer
         from sqlalchemy.orm import joinedload
         base_query = db.session.query(Klacht).options(
             joinedload(Klacht.verantwoordelijke),
@@ -471,30 +475,27 @@ def user_klachten():
             joinedload(Klacht.businessunit)
         )
         
-        # Debug: check role and user info
+        # Debug: check rol en gebruikersinfo
         print(f"DEBUG: Role={role}, user_id={user_id}, bu_id={bu_id}")
         
-        # Rol-gebaseerde filtering
+        # Filter op rol
         if role == 'User':
             klachten_raw = base_query.filter_by(verantwoordelijke_id=user_id).all()
-            print(f"DEBUG: User role - Found {len(klachten_raw)} klachten for user_id={user_id}")
+            print(f"DEBUG: User rol - Gevonden {len(klachten_raw)} klachten voor user_id={user_id}")
         elif role == 'Key user' and bu_id:
             klachten_raw = base_query.filter_by(businessunit_id=bu_id).all()
-            print(f"DEBUG: Key user role - Found {len(klachten_raw)} klachten for bu_id={bu_id}")
+            print(f"DEBUG: Key user rol - Gevonden {len(klachten_raw)} klachten voor bu_id={bu_id}")
         else:
             # Admin of andere rollen: toon alle klachten
             klachten_raw = base_query.order_by(Klacht.datum_melding.desc()).all()
-            print(f"DEBUG: Admin/Other role - Found {len(klachten_raw)} klachten (all)")
+            print(f"DEBUG: Admin/Andere rol - Gevonden {len(klachten_raw)} klachten (alle)")
         
-        # Sorteer (veilig voor timezone-aware en naive datetimes)
+        # Sorteer (veilig voor tijdzones)
         def safe_sort_key(k):
             dm = k.datum_melding
             if dm is None:
-                # Gebruik een ver verleden tijd als fallback (timezone-naive)
                 return datetime(1900, 1, 1)
-            # Normaliseer naar UTC als timezone-aware, anders gebruik zoals het is
             if hasattr(dm, 'tzinfo') and dm.tzinfo is not None:
-                # Timezone-aware: converteer naar UTC en verwijder timezone info voor vergelijking
                 return dm.astimezone(timezone.utc).replace(tzinfo=None)
             return dm
         
@@ -503,19 +504,19 @@ def user_klachten():
         else:
             klachten_raw = sorted(klachten_raw, key=safe_sort_key, reverse=True)
         
-        # Converteer naar dicts
-        print(f"DEBUG: Converting {len(klachten_raw)} klachten to dicts...")
+        # Zet om naar dicts
+        print(f"DEBUG: Converteer {len(klachten_raw)} klachten naar dicts...")
         klachten = []
         for k in klachten_raw:
             try:
                 klacht_dict = klacht_to_dict(k)
                 klachten.append(klacht_dict)
             except Exception as e:
-                print(f"DEBUG: Error converting klacht {k.klacht_id}: {e}")
+                print(f"DEBUG: Fout bij converteren klacht {k.klacht_id}: {e}")
                 import traceback
                 traceback.print_exc()
         
-        print(f"DEBUG: Successfully converted {len(klachten)} klachten")
+        print(f"DEBUG: Succesvol {len(klachten)} klachten geconverteerd")
         
         # Verantwoordelijken voor filter
         rep_map = {}
@@ -528,9 +529,9 @@ def user_klachten():
                 reps_for_filter = [{'id': r.gebruiker_id, 'naam': r.naam} for r in reps]
                 reps_for_filter = sorted(reps_for_filter, key=lambda x: x['naam'].lower())
         except Exception as e:
-            print(f"Warning: verantwoordelijke info kon niet geladen worden: {e}")
+            print(f"Waarschuwing: verantwoordelijke info kon niet geladen worden: {e}")
         
-        # Apply filters from GET params
+        # Pas filters toe van GET parameters
         klant_id = request.args.get('klant_id')
         klant_naam = request.args.get('klant_naam')
         if not klant_id and klant_naam:
@@ -538,8 +539,7 @@ def user_klachten():
             if klant:
                 klant_id = klant.klant_id
             else:
-                # Klantnaam ingevuld maar niet gevonden in systeem:
-                # toon expliciet geen resultaten voor deze filter
+                # Klantnaam ingevuld maar niet gevonden: toon geen resultaten
                 klachten = []
         
         categorie_id = request.args.get('categorie_id')
@@ -549,7 +549,7 @@ def user_klachten():
         businessunit_filter = (request.args.get('businessunit') or '').strip()
         verantwoordelijke_naam = (request.args.get('verantwoordelijke_naam') or request.args.get('vertegenwoordiger_naam') or '').strip()
         high_priority = (request.args.get('high_priority') or '').lower() in ('true', '1', 'on')
-        # Check filters_applied (veilig voor alle types, geen iteratie over datetime)
+        # Check of filters gebruikt zijn
         filters_applied = bool(
             klant_id or klant_naam or categorie_id or status or 
             date_from or date_to or businessunit_filter or 
@@ -585,9 +585,9 @@ def user_klachten():
         # Key user filtering: alleen klachten van eigen businessunit
         if role == 'Key user' and bu_session:
             klachten = [k for k in klachten if (k.get('businessunit') == bu_session)]
-            print(f"DEBUG: After Key user businessunit filter, {len(klachten)} klachten remaining")
+            print(f"DEBUG: Na Key user businessunit filter, {len(klachten)} klachten over")
         else:
-            print(f"DEBUG: After businessunit processing, {len(klachten)} klachten remaining")
+            print(f"DEBUG: Na businessunit verwerking, {len(klachten)} klachten over")
 
         if businessunit_filter and role != 'Key user':
             klachten = [k for k in klachten if k.get('businessunit') == businessunit_filter.strip()]
@@ -595,11 +595,11 @@ def user_klachten():
         if high_priority:
             klachten = [k for k in klachten if k.get('prioriteit')]
 
-        # Normalizeer bijlages
+        # Maak bijlagen netjes
         for k in klachten:
             k['bijlages'] = normalize_bijlages(k.get('bijlages'))
 
-        print(f"DEBUG: After all filters, {len(klachten)} klachten remaining")
+        print(f"DEBUG: Na alle filters, {len(klachten)} klachten over")
         print(f"DEBUG: Role={role}, user_id={user_id}, bu_id={bu_id}")
 
         # Haal filter opties op
@@ -609,7 +609,7 @@ def user_klachten():
         businessunits_used = get_businessunits_list()
         status_options = get_status_options()
 
-        print(f"DEBUG: Rendering template with {len(klachten)} klachten")
+        print(f"DEBUG: Render template met {len(klachten)} klachten")
         return render_template('user_klachten.html',
                                klachten=klachten,
                                categorieen=categorieen,
@@ -623,15 +623,15 @@ def user_klachten():
     except Exception as e:
         error_msg = str(e)
         error_type = type(e).__name__
-        print(f"EXCEPTION in user_klachten: {error_type}: {error_msg}")
+        print(f"FOUT in user_klachten: {error_type}: {error_msg}")
         import traceback
-        print("Full traceback:")
+        print("Volledige traceback:")
         traceback.print_exc()
-        # Toon meer details in development mode
+        # Toon details in development mode
         error_detail = f"{error_type}: {error_msg[:150]}"
         flash(f'Er ging iets mis bij het ophalen van klachten: {error_detail}', 'error')
-        # Probeer in ieder geval lege lijst te tonen in plaats van crash
-        print(f"DEBUG: Exception occurred, returning empty list")
+        # Toon lege lijst in plaats van crashen
+        print(f"DEBUG: Fout opgetreden, geef lege lijst terug")
         return render_template(
             'user_klachten.html',
             klachten=[],
@@ -653,7 +653,7 @@ def klacht_details(klacht_id):
         return redirect(url_for('main.login'))
 
     try:
-        # Haal klacht op via ORM
+        # Haal klacht op via database
         klacht = services.get_klacht_by_id(klacht_id)
         if not klacht:
             flash('Klacht niet gevonden', 'error')
@@ -661,7 +661,7 @@ def klacht_details(klacht_id):
         
         klacht_data = klacht_to_dict(klacht)
 
-        # Authorization check
+        # Controleer of gebruiker mag kijken
         if not can_view_klacht(klacht_data, safe_int(session['user_id']), session.get('user_rol')):
             flash('Toegang geweigerd', 'error')
             return redirect(url_for('main.user_klachten'))
@@ -689,7 +689,7 @@ def klacht_details(klacht_id):
             klanten_all = services.get_all_klanten()
             klanten = [{'klant_id': k.klant_id, 'klantnaam': k.klantnaam} for k in klanten_all]
         except Exception as e:
-            print(f"Error bij ophalen klanten: {e}")
+            print(f"Fout bij ophalen klanten: {e}")
             klanten = []
 
         try:
@@ -707,7 +707,7 @@ def klacht_details(klacht_id):
             producten_all = services.get_all_products()
             producten = [{'artikel_nr': p.artikel_nr, 'naam': p.naam} for p in producten_all]
         except Exception as e:
-            print(f"Error bij ophalen orders/producten: {e}")
+            print(f"Fout bij ophalen orders/producten: {e}")
             orders = []
             producten = []
 
@@ -720,12 +720,12 @@ def klacht_details(klacht_id):
                 vertegenw = [{'gebruiker_id': u.gebruiker_id, 'naam': u.naam, 'rol': u.rol, 'businessunit_id': u.businessunit_id} for u in users]
                 vertegenw = sorted(vertegenw, key=lambda u: (u.get('naam') or '').lower())
             except Exception as e:
-                print(f"Warning: could not fetch vertegenw: {e}")
+                print(f"Waarschuwing: kon vertegenw niet ophalen: {e}")
                 vertegenw = []
         
-        # Normalizeer bijlages
+        # Maak bijlagen netjes
         raw_bijlages = klacht_data.get('bijlages')
-        print(f"DEBUG: Raw bijlages voor klacht {klacht_id}: {raw_bijlages}")
+        print(f"DEBUG: Ruwe bijlages voor klacht {klacht_id}: {raw_bijlages}")
         normalized_bijlages = normalize_bijlages(raw_bijlages)
         print(f"DEBUG: Genormaliseerde bijlages voor klacht {klacht_id}: {normalized_bijlages}")
         klacht_data['bijlages'] = normalized_bijlages
@@ -744,22 +744,22 @@ def klacht_details(klacht_id):
             status_options=get_status_options()
         )
     except Exception as e:
-        print(f"Exception in klacht_details: {e}")
+        print(f"Fout in klacht_details: {e}")
         traceback.print_exc()
         flash('Er ging iets mis bij het ophalen van de klacht details', 'error')
         return redirect(url_for('main.user_klachten'))
 
 
-# Helper: upload one file to Supabase Storage and return bijlage dict (met URL)
+# Upload bestand naar Supabase Storage
 def upload_file_to_storage(file_obj, store_in_db=False, klacht_id=None, klant_naam=None, klant_id_val=None, businessunit_name=None):
-    """Upload file naar Supabase Storage en retourneer bijlage dict met URL."""
+    """Upload file naar Supabase Storage en geef bijlage dict met URL terug."""
     if not file_obj or not getattr(file_obj, 'filename', None):
         return None
     try:
         safe_name = secure_filename(file_obj.filename)
         unique_id = str(uuid.uuid4())
         
-        # Bepaal directory structuur (zoals in Supabase bucket)
+        # Bepaal map structuur (zoals in Supabase bucket)
         bu_part = secure_filename(businessunit_name.replace(' ', '_')) if businessunit_name else "OnbekendeBU"
         if klant_naam:
             klant_part = secure_filename(klant_naam).replace(' ', '_')[:15]
@@ -775,7 +775,7 @@ def upload_file_to_storage(file_obj, store_in_db=False, klacht_id=None, klant_na
         
         content_type = getattr(file_obj, 'mimetype', 'application/octet-stream')
         
-        # Lees file bytes
+        # Lees bestand bytes
         try:
             file_obj.stream.seek(0)
         except Exception:
@@ -786,11 +786,11 @@ def upload_file_to_storage(file_obj, store_in_db=False, klacht_id=None, klant_na
         else:
             file_bytes = file_obj.get('bytes', b'')
         
-        # Upload naar Supabase Storage via directe HTTP request
+        # Upload naar Supabase Storage via HTTP request
         if check_supabase_config():
             try:
                 print(f"DEBUG: Probeer bestand te uploaden naar Supabase: {storage_path}")
-                print(f"DEBUG: Bucket: {Config.SUPABASE_STORAGE_BUCKET}, File size: {len(file_bytes)} bytes")
+                print(f"DEBUG: Bucket: {Config.SUPABASE_STORAGE_BUCKET}, Bestandsgrootte: {len(file_bytes)} bytes")
                 
                 # Supabase Storage API endpoint voor upload
                 upload_url = f"{Config.SUPABASE_URL}/storage/v1/object/{Config.SUPABASE_STORAGE_BUCKET}/{storage_path}"
@@ -799,7 +799,7 @@ def upload_file_to_storage(file_obj, store_in_db=False, klacht_id=None, klant_na
                 headers = {
                     "Authorization": f"Bearer {Config.SUPABASE_KEY}",
                     "Content-Type": content_type,
-                    "x-upsert": "false"  # Voorkom overschrijven van bestaande bestanden
+                    "x-upsert": "false"  # Voorkom overschrijven bestaande bestanden
                 }
                 
                 # Upload bestand via HTTP POST
@@ -811,7 +811,7 @@ def upload_file_to_storage(file_obj, store_in_db=False, klacht_id=None, klant_na
                 )
                 
                 print(f"DEBUG: Upload response status: {response.status_code}")
-                print(f"DEBUG: Upload response: {response.text[:200] if response.text else 'No response body'}")
+                print(f"DEBUG: Upload response: {response.text[:200] if response.text else 'Geen response body'}")
                 print(f"DEBUG: Gebruikte key type: {'SERVICE_ROLE' if Config.SUPABASE_SERVICE_KEY else 'ANON (fallback - uploads kunnen falen!)'}")
                 
                 if response.status_code in [200, 201]:
@@ -827,7 +827,7 @@ def upload_file_to_storage(file_obj, store_in_db=False, klacht_id=None, klant_na
                         "upload_date": datetime.utcnow().isoformat(),
                         "storage_path": storage_path  # Bewaar pad voor verwijderen
                     }
-                    print(f"SUCCESS: Bestand succesvol geüpload naar Supabase Storage: {storage_path}")
+                    print(f"SUCCES: Bestand succesvol geüpload naar Supabase Storage: {storage_path}")
                     return bijlage
                 else:
                     error_response = response.text
@@ -838,20 +838,20 @@ def upload_file_to_storage(file_obj, store_in_db=False, klacht_id=None, klant_na
                             f"Status: {response.status_code}, Response: {error_response}"
                         )
                     else:
-                        error_msg = f"Supabase upload failed met status {response.status_code}: {error_response}"
-                    print(f"ERROR: {error_msg}")
+                        error_msg = f"Supabase upload mislukt met status {response.status_code}: {error_response}"
+                    print(f"FOUT: {error_msg}")
                     raise Exception(error_msg)
                     
             except Exception as e:
-                print(f"ERROR: Supabase upload error: {e}")
-                print(f"ERROR: Error type: {type(e).__name__}")
+                print(f"FOUT: Supabase upload error: {e}")
+                print(f"FOUT: Error type: {type(e).__name__}")
                 traceback.print_exc()
-                # Geen fallback meer - gooi error door zodat gebruiker weet dat upload faalde
+                # Geen fallback meer - geef error door
                 raise Exception(f"Upload naar Supabase Storage mislukt: {str(e)}")
         else:
-            # Geen fallback meer - gooi error als configuratie niet correct is
+            # Geen fallback meer - geef error als configuratie niet goed is
             error_msg = "Supabase configuratie niet correct. Upload naar Supabase Storage is vereist."
-            print(f"ERROR: {error_msg}")
+            print(f"FOUT: {error_msg}")
             raise Exception(error_msg)
             
     except Exception as e:
@@ -859,15 +859,13 @@ def upload_file_to_storage(file_obj, store_in_db=False, klacht_id=None, klant_na
         traceback.print_exc()
         return None
 
-# Lokale fallback functie verwijderd - uploads moeten altijd naar Supabase Storage gaan
-
-# Helper: delete file from Supabase Storage (of lokale storage als fallback)
+# Verwijder bestand van Supabase Storage
 def delete_file_from_storage(file_url):
     """Verwijder file uit Supabase Storage of lokale storage."""
     try:
         if not file_url:
             return None
-        # Skip data URLs (legacy)
+        # Skip data URLs (oude ondersteuning)
         if file_url.startswith('data:'):
             return None
         
@@ -876,17 +874,17 @@ def delete_file_from_storage(file_url):
             # Parse Supabase URL om storage path te krijgen
             # Format: https://[project].supabase.co/storage/v1/object/public/bijlages/path/to/file
             try:
-                # Extract path na /public/bijlages/
+                # Haal path op na /public/bijlages/
                 if '/public/' in file_url:
                     path_part = file_url.split('/public/')[1]
                     if '/' in path_part:
-                        # Skip bucket name (eerste deel na /public/)
+                        # Sla bucket naam over (eerste deel na /public/)
                         parts = path_part.split('/', 1)
                         storage_path = parts[1] if len(parts) > 1 else path_part
                     else:
                         storage_path = path_part
                     
-                    # Verwijder via directe HTTP DELETE request
+                    # Verwijder via HTTP DELETE request
                     if check_supabase_config():
                         delete_url = f"{Config.SUPABASE_URL}/storage/v1/object/{Config.SUPABASE_STORAGE_BUCKET}/{storage_path}"
                         headers = {
@@ -895,19 +893,19 @@ def delete_file_from_storage(file_url):
                         response = requests.delete(delete_url, headers=headers, timeout=30)
                         
                         if response.status_code in [200, 204]:
-                            print(f"SUCCESS: Bestand verwijderd uit Supabase Storage: {storage_path}")
+                            print(f"SUCCES: Bestand verwijderd uit Supabase Storage: {storage_path}")
                             return True
                         else:
-                            print(f"ERROR: Supabase delete failed met status {response.status_code}: {response.text}")
+                            print(f"FOUT: Supabase delete mislukt met status {response.status_code}: {response.text}")
                             return None
             except Exception as e:
-                print(f"ERROR: Supabase delete error: {e}")
+                print(f"FOUT: Supabase delete error: {e}")
                 traceback.print_exc()
                 return None
         
-        # Fallback: lokale storage verwijderen
+        # Backup: verwijder uit lokale storage
         if file_url.startswith('/uploads/'):
-            file_url = file_url[1:]  # Remove leading /
+            file_url = file_url[1:]  # Verwijder leading /
         
         if file_url.startswith('uploads/'):
             upload_path = ensure_upload_dir()
@@ -924,7 +922,7 @@ def delete_file_from_storage(file_url):
 
 @main.route('/user/klacht/aanmaken', methods=['GET', 'POST'])
 def klacht_aanmaken():
-    # Allow Users, Key users and Admins to create complaints
+    # Toegang voor Users, Key users en Admins
     if 'user_id' not in session or normalized_role() not in ('User', 'Key user', 'Admin'):
         flash('Toegang geweigerd', 'error')
         return redirect(url_for('main.login'))
@@ -948,7 +946,7 @@ def klacht_aanmaken():
         producten_all = services.get_all_products()
         producten = [{'artikel_nr': p.artikel_nr, 'naam': p.naam} for p in producten_all]
     except Exception as e:
-        print(f"Error bij ophalen data: {e}")
+        print(f"Fout bij ophalen data: {e}")
         klanten = []
         categorieen = []
         orders = []
@@ -956,7 +954,7 @@ def klacht_aanmaken():
 
     bu_prefill = safe_int(session.get('businessunit_id'))
     
-    # Haal initiële suggesties op voor de GET-pagina of als fallback na fout
+    # Haal initiële suggesties op voor GET-pagina of na fout
     suggested_categorie_type = suggest_categorie_safe(
         request.form.get('reden_afwijzing', '').strip(),
         request.form.get('mogelijke_oorzaak', '').strip(),
@@ -977,21 +975,21 @@ def klacht_aanmaken():
             mogelijke_oorzaak = request.form.get('mogelijke_oorzaak', '').strip()
             klacht_omschrijving = request.form.get('reden_afwijzing', '').strip()
             
-            # De businessunit naam is cruciaal voor het pad, zorg dat deze correct is
+            # Businessunit naam is belangrijk voor pad
             businessunit = request.form.get('businessunit', '').strip() or (session.get('businessunit_naam') or '').strip()
             bu_id = services.resolve_or_create_businessunit(businessunit) if businessunit else None
             
-            # 1. Bepaal Klant ID en Klantnaam - klant moet bestaan (geen automatische creatie)
+            # 1. Bepaal Klant ID en Klantnaam - klant moet bestaan
             klant_naam_used = klant_naam
             if not klant_id:
                 if klant_naam:
-                    # Probeer klant_id op te lossen via ORM
+                    # Probeer klant_id op te lossen via database
                     klant = services.get_klant_by_name(klant_naam)
                     if klant:
                         klant_id = klant.klant_id
                     else:
                         flash('Klant niet gevonden. Kies een bestaande klant uit de lijst.', 'error')
-                        # Zorg dat suggestion/categorie waarden behouden blijven
+                        # Bewaar suggestie/categorie waarden
                         suggested_categorie_type = suggest_categorie_safe(
                             klacht_omschrijving,
                             mogelijke_oorzaak,
@@ -1033,7 +1031,7 @@ def klacht_aanmaken():
                         selected_categorie_id=selected_categorie_id
                     )
             elif klant_id and not klant_naam:
-                # Haal de naam op als we alleen het ID hebben
+                # Haal naam op als we alleen ID hebben
                 klant = services.get_klant_by_id(klant_id)
                 if klant:
                     klant_naam_used = klant.klantnaam
@@ -1041,7 +1039,7 @@ def klacht_aanmaken():
             # Valideer verplichte velden
             if not klant_id or not categorie_id or not order_nummer or not artikelnummer or not aantal_eenheden or not klacht_omschrijving or not businessunit:
                 flash('Klant, categorie, ordernummer, artikelnummer, aantal eenheden, businessunit en klacht omschrijving zijn verplicht', 'error')
-                # Zorg ervoor dat de suggestie correct werkt, ook na een POST-fout
+                # Zorg dat suggestie werkt na POST-fout
                 suggested_categorie_type = suggest_categorie_safe(
                     klacht_omschrijving,
                     mogelijke_oorzaak,
@@ -1071,7 +1069,7 @@ def klacht_aanmaken():
                 categorie_id = str(suggested_categorie_id)
             selected_categorie_id = categorie_id or suggested_categorie_id
 
-            # 3. Bestanden in geheugen opslaan (upload uitstellen)
+            # 3. Bestanden in geheugen opslaan (upload later)
             uploaded_files_in_memory = []
             files = []
             files += request.files.getlist('bijlage') or []
@@ -1081,7 +1079,7 @@ def klacht_aanmaken():
             for f in files:
                 if not f or not getattr(f, 'filename', None):
                     continue
-                # Simple check for empty file and deduplication
+                # Controleer leeg bestand en dubbele bestanden
                 f.stream.seek(0, os.SEEK_END)
                 size = f.stream.tell()
                 f.stream.seek(0)
@@ -1092,7 +1090,7 @@ def klacht_aanmaken():
                     continue
                 seen_key.add(key)
                 
-                # Lees de bytes en sla ze in het geheugen op, samen met de metadata
+                # Lees bytes en sla op in geheugen met metadata
                 file_bytes = f.read()
                 f.stream.seek(0) # Reset pointer
                 uploaded_files_in_memory.append({
@@ -1104,7 +1102,7 @@ def klacht_aanmaken():
             # Alleen datum (zonder uur)
             vandaag = date.today().isoformat()
 
-            # 4. Valideer dat order en product bestaan (klachten alleen voor bestaande orders/artikelen)
+            # 4. Valideer dat order en product bestaan (alleen bestaande orders/artikelen)
             order_obj = services.get_order_by_nummer(order_nummer)
             product_obj = services.get_product_by_artikelnummer(artikelnummer)
             if not order_obj:
@@ -1121,7 +1119,7 @@ def klacht_aanmaken():
                     suggested_categorie_type=suggested_categorie_type,
                     selected_categorie_id=selected_categorie_id
                 )
-            # Controleer of de klant van het gekozen order overeenkomt met de opgegeven klant
+            # Controleer of klant van order overeenkomt met opgegeven klant
             try:
                 order_klant_id = getattr(order_obj, 'klant_id', None)
                 if order_klant_id is not None and klant_id:
@@ -1155,7 +1153,7 @@ def klacht_aanmaken():
                     suggested_categorie_type=suggested_categorie_type,
                     selected_categorie_id=selected_categorie_id
                 )
-            # Maak nieuwe klacht via ORM
+            # Maak nieuwe klacht via database
             nieuwe_klacht = Klacht(
                 verantwoordelijke_id=safe_int(session['user_id']),
                 klant_id=int(klant_id),
@@ -1178,17 +1176,17 @@ def klacht_aanmaken():
             db.session.commit()
             nieuw_id = nieuwe_klacht.klacht_id
             
-            # 5. Bestanden uploaden met de nieuwe Klacht ID
+            # 5. Bestanden uploaden met nieuwe Klacht ID
             bijlages_uploaded = []
             for file_data in uploaded_files_in_memory:
                 try:
-                    # Creëer een bestand-object-achtige structuur van de in-memory bytes
+                    # Maak bestand-object van geheugen bytes
                     file_obj_temp = io.BytesIO(file_data['bytes'])
-                    # Voeg filename en mimetype toe zodat upload_file_to_storage werkt
+                    # Voeg filename en mimetype toe
                     file_obj_temp.filename = file_data['filename']
                     file_obj_temp.mimetype = file_data['mimetype']
                     
-                    # upload_file_to_storage met de NIEUWE parameters
+                    # upload_file_to_storage met NIEUWE parameters
                     uploaded = upload_file_to_storage(
                         file_obj_temp,
                         store_in_db=False,
@@ -1201,20 +1199,20 @@ def klacht_aanmaken():
                         bijlages_uploaded.append(uploaded)
                 except Exception as e:
                     error_msg = f"Fout bij uploaden van bestand '{file_data['filename']}': {str(e)}"
-                    print(f"ERROR - {error_msg}")
+                    print(f"FOUT - {error_msg}")
                     flash(error_msg, 'error')
-                    # Stop de hele operatie als upload faalt - geen lokale fallback meer
+                    # Stop operatie als upload faalt
                     raise Exception(f"Upload van bijlage mislukt: {str(e)}")
             
-            # 6. Update de klacht met bijlage-URL's (als er bijlages zijn)
+            # 6. Update klacht met bijlage-URL's (als er bijlages zijn)
             if bijlages_uploaded:
                 serialized_bijlages = serialize_bijlages_for_db(bijlages_uploaded)
                 nieuwe_klacht.bijlages = serialized_bijlages
                 db.session.commit()
             
-            # 7. Succesmelding en redirect naar dashboard
+            # 7. Succesmelding en ga naar dashboard
             flash('Klacht succesvol aangemaakt!', 'success')
-            # Redirect naar rol-specifieke dashboard
+            # Ga naar rol-specifieke dashboard
             role = normalized_role()
             if role == 'Admin':
                 return redirect(url_for('main.admin_dashboard'))
@@ -1226,7 +1224,7 @@ def klacht_aanmaken():
         except Exception as e:
             error_msg = f'Er ging iets mis bij het aanmaken van de klacht: {str(e)}'
             flash(error_msg, 'error')
-            print(f"ERROR - Exception: {str(e)}")
+            print(f"FOUT - Exception: {str(e)}")
     
     return render_template(
         'klacht_aanmaken.html',
@@ -1244,7 +1242,7 @@ def klacht_aanmaken():
 
 @main.route('/suggest-categorie', methods=['POST'])
 def suggest_categorie():
-    """Server-side categorie suggestie endpoint (retourneert alleen text, geen JSON API)."""
+    """Server-side categorie suggestie endpoint (geeft alleen tekst, geen JSON API)."""
     try:
         omschrijving = request.form.get('klacht_omschrijving', '').strip()
         oorzaak = request.form.get('mogelijke_oorzaak', '').strip()
@@ -1260,7 +1258,7 @@ def suggest_categorie():
         suggested = suggest_categorie_safe(omschrijving, oorzaak, bu_id)
         return suggested or '', 200, {'Content-Type': 'text/plain; charset=utf-8'}
     except Exception as e:
-        print(f"Error in suggest_categorie: {e}")
+        print(f"Fout in suggest_categorie: {e}")
         return '', 200, {'Content-Type': 'text/plain; charset=utf-8'}
 
 
@@ -1279,24 +1277,24 @@ def admin_dashboard():
     total_gebruikers = 0
     today_str = date.today().isoformat()
     try:
-        # Tel gebruikers via ORM
+        # Tel gebruikers via database
         try:
             total_gebruikers = db.session.query(Gebruiker).count()
         except Exception as ue:
-            print(f"Warning: count gebruikers failed: {ue}")
+            print(f"Waarschuwing: tellen gebruikers mislukt: {ue}")
             total_gebruikers = 0
 
-        # Tel klachten (open) en vandaag via ORM
+        # Tel klachten (open) en vandaag via database
         try:
             klachten_all = services.get_all_klachten()
             total_klachten = len([k for k in klachten_all if k.status != 'Afgehandeld'])
             today_new = len([k for k in klachten_all if is_klacht_today(k, today_str)])
         except Exception as ke:
-            print(f"Warning: count klachten failed: {ke}")
+            print(f"Waarschuwing: tellen klachten mislukt: {ke}")
             total_klachten = 0
             today_new = 0
     except Exception as e:
-        print(f"Error admin stats: {e}")
+        print(f"Fout admin stats: {e}")
         traceback.print_exc()
         total_klachten = 0
         total_gebruikers = 0
@@ -1328,32 +1326,32 @@ def admin_users_page():
                 'businessunit_naam': services.get_businessunit_name(u.businessunit_id) if u.businessunit_id else ''
             })
     except Exception as e:
-        print(f"Error fetching users: {e}")
+        print(f"Fout bij ophalen gebruikers: {e}")
         gebruikers = []
     businessunits_used = get_businessunits_list()
     return render_template('admin_users.html', gebruikers=gebruikers, businessunits=businessunits_used)
 
-# Update role usage when creating users
+# Update rol gebruik bij aanmaken gebruikers
 @main.route('/admin/users', methods=['POST'])
 def admin_create_user():
-    # Alleen admins mogen gebruikers aanmaken vanuit het beheer scherm
+    # Alleen admins mogen gebruikers aanmaken vanuit beheer scherm
     if 'user_id' not in session or normalized_role() != 'Admin':
         flash('Toegang geweigerd', 'error')
         return redirect(url_for('main.login'))
 
-    # Form velden ophalen en normaliseren
+    # Form velden ophalen en netjes maken
     naam = (request.form.get('naam') or '').strip()
     email = (request.form.get('email') or '').strip()
     rol = (request.form.get('rol') or 'User').strip()
     wachtwoord = (request.form.get('wachtwoord') or 'changeme').strip()
     businessunit_raw = (request.form.get('businessunit') or '').strip() or None
 
-    # Basisvalidatie
+    # Basiscontrole
     if not naam or not email:
         flash('Naam en email zijn verplicht', 'error')
         return redirect(url_for('main.admin_users_page'))
     try:
-        # Let op: wachtwoord wordt nu in platte tekst opgeslagen op verzoek
+        # Let op: wachtwoord wordt nu in platte tekst opgeslagen
         hashed = wachtwoord
         bu_id = services.resolve_or_create_businessunit(businessunit_raw)
         
@@ -1378,7 +1376,7 @@ def admin_create_user():
         db.session.rollback()
         try:
             max_id = db.session.query(db.func.max(Gebruiker.gebruiker_id)).scalar() or 0
-            # Alleen uitvoeren voor PostgreSQL
+            # Alleen voor PostgreSQL
             if db.engine.dialect.name == 'postgresql':
                 db.session.execute(
                     db.text(
@@ -1401,13 +1399,13 @@ def admin_create_user():
                 flash('Er ging iets mis bij het aanmaken van de gebruiker (PK conflict)', 'error')
         except Exception as e_reset:
             db.session.rollback()
-            print(f"Error resetting gebruiker_id sequence: {e_reset}")
+            print(f"Fout bij resetten gebruiker_id sequence: {e_reset}")
             flash('Er ging iets mis bij het aanmaken van de gebruiker', 'error')
     except Exception as e:
-        print(f"Error creating user: {e}")
+        print(f"Fout bij aanmaken gebruiker: {e}")
         db.session.rollback()
         flash('Er ging iets mis bij het aanmaken van de gebruiker', 'error')
-    # Redirect to users beheer page
+    # Ga terug naar gebruikers beheer pagina
     return redirect(url_for('main.admin_users_page'))
 
 @main.route('/admin/users/<int:user_id>/update', methods=['POST'])
@@ -1434,7 +1432,7 @@ def admin_update_user(user_id):
         db.session.commit()
         flash('Gebruiker bijgewerkt', 'success')
     except Exception as e:
-        print(f"admin_update_user error: {e}")
+        print(f"admin_update_user fout: {e}")
         db.session.rollback()
         flash('Fout bij bijwerken gebruiker', 'error')
     return redirect(url_for('main.admin_users_page'))
@@ -1450,7 +1448,7 @@ def admin_delete_user(user_id):
             flash('Gebruiker niet gevonden', 'error')
             return redirect(url_for('main.admin_users_page'))
         
-        # Block deletion when the user still owns open complaints
+        # Blokkeer verwijderen als gebruiker nog open klachten heeft
         open_klachten = db.session.query(Klacht).filter_by(
             verantwoordelijke_id=user_id
         ).filter(Klacht.status.notin_(['Afgehandeld', 'Afgewezen'])).all()
@@ -1464,7 +1462,7 @@ def admin_delete_user(user_id):
         db.session.commit()
         flash('Gebruiker verwijderd', 'success')
     except Exception as e:
-        print(f"admin_delete_user error: {e}")
+        print(f"admin_delete_user fout: {e}")
         db.session.rollback()
         flash('Fout bij verwijderen gebruiker', 'error')
     return redirect(url_for('main.admin_users_page'))
@@ -1475,11 +1473,11 @@ def admin_businessunits_page():
         flash('Toegang geweigerd', 'error')
         return redirect(url_for('main.login'))
     try:
-        # Toon businessunits gesorteerd op ID, zodat de nieuwe volgorde duidelijk is
+        # Toon businessunits gesorteerd op ID
         businessunits_raw = db.session.query(Businessunit).order_by(Businessunit.businessunit_id.asc()).all()
         businessunits = [{'businessunit_id': bu.businessunit_id, 'naam': bu.naam} for bu in businessunits_raw]
     except Exception as e:
-        print(f"admin_businessunits_page error: {e}")
+        print(f"admin_businessunits_page fout: {e}")
         businessunits = []
         flash('Kon businessunits niet ophalen', 'error')
     return render_template('admin_businessunits.html', businessunits=businessunits)
@@ -1494,14 +1492,14 @@ def admin_create_businessunit():
         flash('Naam van businessunit is verplicht', 'error')
         return redirect(url_for('main.admin_businessunits_page'))
     try:
-        # Voorkom dubbele insert: check bestaat
+        # Voorkom dubbele invoer: check of bestaat
         existing = db.session.query(Businessunit).filter_by(naam=naam).first()
         if existing:
             flash('Businessunit bestaat al', 'info')
             return redirect(url_for('main.admin_businessunits_page'))
 
-        # Omdat de PK in de database geen automatische sequence heeft,
-        # bepalen we hier handmatig het volgende ID (max + 1).
+        # Omdat PK geen automatische sequence heeft,
+        # bepalen we handmatig volgende ID (max + 1).
         max_id = db.session.query(db.func.max(Businessunit.businessunit_id)).scalar() or 0
         new_id = max_id + 1
 
@@ -1510,7 +1508,7 @@ def admin_create_businessunit():
         db.session.commit()
         flash('Businessunit toegevoegd', 'success')
     except Exception as e:
-        print(f"admin_create_businessunit error: {e}")
+        print(f"admin_create_businessunit fout: {e}")
         db.session.rollback()
         flash(f'Fout bij toevoegen businessunit: {e}', 'error')
     return redirect(url_for('main.admin_businessunits_page'))
@@ -1541,7 +1539,7 @@ def admin_delete_businessunit(businessunit_id):
         db.session.commit()
         flash('Businessunit verwijderd', 'success')
     except Exception as e:
-        print(f"admin_delete_businessunit error: {e}")
+        print(f"admin_delete_businessunit fout: {e}")
         db.session.rollback()
         flash('Fout bij verwijderen businessunit', 'error')
     return redirect(url_for('main.admin_businessunits_page'))
@@ -1571,20 +1569,20 @@ def keyuser_assign_klacht(klacht_id):
             flash('Geen gebruiker geselecteerd', 'error')
             return redirect(url_for('main.klacht_details', klacht_id=klacht_id))
 
-        # Check of de geselecteerde gebruiker bestaat
+        # Check of geselecteerde gebruiker bestaat
         new_rep = services.get_user_by_id(nieuwe_rep)
         if not new_rep:
             flash('Gekozen gebruiker niet gevonden', 'error')
             return redirect(url_for('main.klacht_details', klacht_id=klacht_id))
 
-        # Voer de update uit
+        # Voer update uit
         klacht.verantwoordelijke_id = int(nieuwe_rep)
         klacht.datum_laatst_bewerkt = datetime.now()
         db.session.commit()
         flash('Klacht succesvol toegewezen', 'success')
 
     except Exception as e:
-        print(f"Error assigning complaint: {e}")
+        print(f"Fout bij toewijzen klacht: {e}")
         traceback.print_exc()
         flash('Er ging iets mis bij toewijzen', 'error')
 
@@ -1592,8 +1590,8 @@ def keyuser_assign_klacht(klacht_id):
 
 @main.route('/manager/klacht/<int:klacht_id>/toewijzen', methods=['POST'])
 def manager_assign_klacht(klacht_id):
-    # Backwards compatibility alias: call the keyuser assign handler.
-    # This simply forwards the request, so any templates using the old endpoint will not break.
+    # Backwards compatibility alias: roep keyuser assign handler aan.
+    # Dit stuurt het verzoek door, zodat templates met oude endpoint blijven werken.
     return keyuser_assign_klacht(klacht_id)
 
 @main.route('/keyuser/dashboard')
@@ -1612,7 +1610,7 @@ def keyuser_dashboard():
         bu_name = session.get('businessunit_naam')
         bu_id = session.get('businessunit_id')
         
-        # Haal klachten op via ORM
+        # Haal klachten op via database
         if bu_id:
             klachten_all = db.session.query(Klacht).filter_by(businessunit_id=bu_id).all()
         else:
@@ -1625,13 +1623,13 @@ def keyuser_dashboard():
         # Tel nieuwe klachten van vandaag
         today_new = len([k for k in klachten_all if is_klacht_today(k, today_str)])
     except Exception as e:
-        print("Error getting keyuser stats:", e)
+        print("Fout bij ophalen keyuser stats:", e)
         traceback.print_exc()
         total_klachten = 0
         today_new = 0
     return render_template('keyuser_dashboard.html', total_klachten=total_klachten, today_new=today_new, today_str=today_str, businessunit=bu_name or '')
 
-# Helper: return normalized role as "User", "Key user", "Admin"
+# Geef genormaliseerde rol als "User", "Key user", "Admin"
 def normalized_role():
     r = (session.get('user_rol') or '').strip()
     if not r:
@@ -1644,7 +1642,7 @@ def normalized_role():
         return 'User'
     return r.capitalize()
 
-# Use normalized_role in helpers
+# Gebruik normalized_role in helpers
 def is_admin_role():
     return normalized_role() == 'Admin'
 
@@ -1657,7 +1655,7 @@ def can_view_klacht(klacht, user_id, user_role):
     if role_norm == 'Admin':
         return True
     if role_norm == 'Key user':
-        # Key user mag enkel binnen eigen businessunit
+        # Key user mag alleen binnen eigen businessunit
         bu = get_bu_value(klacht)
         my_bu = (session.get('businessunit_naam') or '').strip()
         if my_bu and bu and bu != my_bu:
@@ -1686,7 +1684,7 @@ def klacht_bewerken(klacht_id):
         return redirect(url_for('main.login'))
     
     try:
-        # Haal klacht op via ORM
+        # Haal klacht op via database
         klacht = services.get_klacht_by_id(klacht_id)
         if not klacht:
             flash('Klacht niet gevonden', 'error')
@@ -1694,12 +1692,12 @@ def klacht_bewerken(klacht_id):
         
         klacht_data = klacht_to_dict(klacht)
         current_role = session.get('user_rol')
-        # Authorization check
+        # Controleer of gebruiker mag bewerken
         if not can_edit_klacht(klacht_data, session['user_id'], current_role):
             flash('Toegang geweigerd', 'error')
             return redirect(url_for('main.user_klachten'))
 
-        # Capture old status BEFORE we update anything
+        # Sla oude status op VOOR we iets updaten
         old_status = klacht.status
 
         # Haal form data op
@@ -1737,43 +1735,42 @@ def klacht_bewerken(klacht_id):
             flash('Artikelnummer niet gevonden. Kies een bestaand artikelnummer uit de lijst.', 'error')
             return redirect(url_for('main.klacht_details', klacht_id=klacht_id))
 
-        # Controleer consistentie tussen geselecteerde klant (form) en klant van het order
+        # Controleer consistentie tussen geselecteerde klant (form) en klant van order
         try:
             order_klant_id = getattr(order_obj, 'klant_id', None)
-            # Als gebruiker expliciet een klant meestuurt in het formulier, mag deze alleen geaccepteerd worden
-            # wanneer die overeenkomt met de klant van het geselecteerde order.
+            # Als gebruiker expliciet klant meestuurt, mag deze alleen geaccepteerd worden
+            # wanneer die overeenkomt met klant van geselecteerde order.
             if klant_id_form:
                 if order_klant_id is not None and str(order_klant_id) != str(klant_id_form):
                     flash('Geselecteerde klant komt niet overeen met klant van het ordernummer. Kies een klant die bij het order hoort.', 'error')
                     return redirect(url_for('main.klacht_details', klacht_id=klacht_id))
 
-            # Ongeacht of de client klant_id meestuurt: als het order hoort bij een andere klant dan
-            # de klacht momenteel heeft, update de klacht en toon een info-melding (dit gebeurt bij opslaan).
+            # Ongeacht of client klant_id meestuurt: als order bij andere klant hoort dan
+            # klacht momenteel heeft, update klacht en toon info-melding.
             if order_klant_id is not None and str(order_klant_id) != str(klacht.klant_id):
                 klacht.klant_id = int(order_klant_id)
                 flash('Klant aangepast naar klant behorend bij het geselecteerde order.', 'info')
         except Exception as e:
-            print(f"Warning: kon klant niet controleren/automatisch bijwerken op basis van order: {e}")
+            print(f"Waarschuwing: kon klant niet controleren/automatisch bijwerken op basis van order: {e}")
 
         # Haal bestaande bijlages
         existing_bijlages_raw = klacht.bijlages
         klant_id_existing = klacht.klant_id
 
-        # Converteer opgeslagen string naar lijst van dicts voor bewerking
+        # Converteer opgeslagen tekst naar lijst van dicts voor bewerking
         existing_bijlages = normalize_bijlages(existing_bijlages_raw)
 
         # 1) Verwijder aangevinkte bijlages
-        # We verwachten een door komma's gescheiden lijst van URL-strings in 'deleted_bijlages' (via template JS)
+        # We verwachten komma-gescheiden lijst van URL-strings in 'deleted_bijlages'
         deleted_urls_csv = request.form.get('deleted_bijlages', '')
         deleted_urls = [x for x in deleted_urls_csv.split(',') if x.strip()] if deleted_urls_csv else []
         
         if deleted_urls:
-            # Delete the file from storage
+            # Verwijder bestand uit storage
             for url in deleted_urls:
                 delete_file_from_storage(url)
             
-            # Filter de te behouden bijlages: alleen de items wiens URL NIET in de deleted_urls lijst zit
-            # We filteren op het URL veld van de dict die normalize_bijlages heeft gemaakt
+            # Filter bijlages die blijven: alleen items waarvan URL NIET in deleted_urls zit
             existing_bijlages = [b for b in existing_bijlages if b.get('url') not in deleted_urls]
 
         # 2) Upload nieuwe bijlages
@@ -1781,7 +1778,7 @@ def klacht_bewerken(klacht_id):
         if new_files:
             for nf in new_files:
                 if nf and nf.filename:
-                    # upload_file_to_storage retourneert een dict met de URL
+                    # upload_file_to_storage geeft dict met URL terug
                     try:
                         uploaded = upload_file_to_storage(
                             nf,
@@ -1795,19 +1792,18 @@ def klacht_bewerken(klacht_id):
                             existing_bijlages.append(uploaded)
                     except Exception as e:
                         error_msg = f"Fout bij uploaden van bestand '{nf.filename}': {str(e)}"
-                        print(f"ERROR - {error_msg}")
+                        print(f"FOUT - {error_msg}")
                         flash(error_msg, 'error')
-                        # Stop de operatie als upload faalt
+                        # Stop operatie als upload faalt
                         raise Exception(f"Upload van bijlage mislukt: {str(e)}")
 
-        # Ensure referenced artikel/order rows exist
-        # REMOVED: no longer automatically creates missing products/orders
-        # Only use the artikel/order if they already exist (validated above)
+        # Verwijzingen naar artikel/order rows bestaan al
+        # VERWIJDERD: maakt niet langer automatisch ontbrekende products/orders aan
 
-        # Serialize bijlages
+        # Maak bijlagen tekst
         serialized_bijlages = serialize_bijlages_for_db(existing_bijlages if existing_bijlages else None)
         
-        # Update klacht via ORM
+        # Update klacht via database
         klacht.order_nummer = order_nummer or None
         klacht.artikelnummer = safe_int(artikelnummer) if artikelnummer else None
         klacht.aantal_eenheden = safe_int(aantal_eenheden) if aantal_eenheden else None
@@ -1826,7 +1822,7 @@ def klacht_bewerken(klacht_id):
             except Exception:
                 pass
 
-        # Process status and prioriteit if the user is a manager
+        # Verwerk status en prioriteit als gebruiker manager is
         status_in_form = request.form.get('status')
         prioriteit_in_form = request.form.get('prioriteit')
 
@@ -1837,7 +1833,7 @@ def klacht_bewerken(klacht_id):
 
         db.session.commit()
 
-        # If the status changed and the user is a manager, insert history
+        # Als status gewijzigd is en gebruiker is manager, voeg geschiedenis toe
         if is_manager_role() and status_in_form and status_in_form != old_status:
             try:
                 services.create_statushistoriek(
@@ -1848,7 +1844,7 @@ def klacht_bewerken(klacht_id):
                     opmerking=request.form.get('status_opmerking') or None
                 )
             except Exception as e:
-                print(f"Error inserting statushistoriek: {e}")
+                print(f"Fout bij invoeren statushistoriek: {e}")
 
         flash('Klacht succesvol bijgewerkt!', 'success')
 
@@ -1856,7 +1852,7 @@ def klacht_bewerken(klacht_id):
         
     except Exception as e:
         flash(f'Er ging iets mis bij het bijwerken van de klacht: {str(e)}', 'error')
-        print(f"Error: {e}")
+        print(f"Fout: {e}")
         traceback.print_exc()
         return redirect(url_for('main.klacht_details', klacht_id=klacht_id))
 
@@ -1867,7 +1863,7 @@ def klacht_verwijderen(klacht_id):
         return redirect(url_for('main.login'))
 
     try:
-        # Haal klacht op via ORM
+        # Haal klacht op via database
         klacht = services.get_klacht_by_id(klacht_id)
         if not klacht:
             flash('Klacht niet gevonden', 'error')
@@ -1875,7 +1871,7 @@ def klacht_verwijderen(klacht_id):
         
         klacht_data = klacht_to_dict(klacht)
         role = normalized_role()
-        # Owner, admin or key user can delete
+        # Eigenaar, admin of key user kan verwijderen
         if not (role in ('Admin', 'Key user') or klacht.verantwoordelijke_id == safe_int(session['user_id'])):
             flash('Toegang geweigerd', 'error')
             return redirect(url_for('main.user_klachten'))
@@ -1887,14 +1883,14 @@ def klacht_verwijderen(klacht_id):
                 try:
                     delete_file_from_storage(url)
                 except Exception as e:
-                    print(f"Warning: error deleting attachment from storage: {e}")
+                    print(f"Waarschuwing: fout bij verwijderen bijlage uit storage: {e}")
 
         # Verwijder klacht
         db.session.delete(klacht)
         db.session.commit()
         flash('Klacht verwijderd', 'success')
     except Exception as e:
-        print(f"Error deleting complaint: {e}")
+        print(f"Fout bij verwijderen klacht: {e}")
         db.session.rollback()
         flash('Er ging iets mis bij verwijderen', 'error')
 
@@ -1907,11 +1903,11 @@ def klachten_export():
         return redirect(url_for('main.user_klachten'))
 
     try:
-        # Haal alle klachten op via ORM
+        # Haal alle klachten op via database
         klachten_raw = services.get_all_klachten()
         klachten = [klacht_to_dict(k) for k in klachten_raw]
 
-        # Apply the same filters used in the UI
+        # Paszelfde filters toe als in UI
         klant_id = request.args.get('klant_id')
         categorie_id = request.args.get('categorie_id')
         status = request.args.get('status')
@@ -1929,7 +1925,7 @@ def klachten_export():
         if date_to:
             klachten = [k for k in klachten if k.get('datum_melding') and str(k['datum_melding'])[:10] <= date_to]
 
-        # Preload klant en categorie mappings
+        # Laad klant en categorie mappings vooraf
         klanten_map = {}
         try:
             klanten_all = services.get_all_klanten()
@@ -1939,16 +1935,16 @@ def klachten_export():
                     'ondernemingsnummer': k.ondernemingsnummer or ''
                 }
         except Exception as em:
-            print(f"Warning export: could not load klanten map: {em}")
+            print(f"Waarschuwing export: kon klanten map niet laden: {em}")
         categorie_map = {}
         try:
             for cat in get_categorieen_list():
                 if cat.get('categorie_id') is not None:
                     categorie_map[int(cat['categorie_id'])] = cat.get('type') or ''
         except Exception as cm:
-            print(f"Warning export: could not load categorie map: {cm}")
+            print(f"Waarschuwing export: kon categorie map niet laden: {cm}")
 
-        # Defensive extraction helper
+        # Veilige extractie helper
         def safe(k, *keys):
             v = k
             for kk in keys:
@@ -1964,13 +1960,13 @@ def klachten_export():
         try:
             klachten = sorted(klachten, key=lambda k: (k.get('klacht_id') or 0))
         except Exception as e_sort:
-            print(f"Warning export: could not sort by klacht_id: {e_sort}")
+            print(f"Waarschuwing export: kon niet sorteren op klacht_id: {e_sort}")
 
-        # Build Excel workbook
+        # Bouw Excel workbook
         wb = Workbook()
         ws = wb.active
         ws.title = "Klachten"
-        # Let op: bijlages/foto's worden niet meer meegenomen in de export
+        # Let op: bijlages/foto's worden niet meegenomen in export
         header = [
             'Klacht ID',
             'Verantwoordelijke ID',
@@ -1992,12 +1988,12 @@ def klachten_export():
         ]
         ws.append(header)
 
-        # set column widths for readability (aantal kolommen moet overeenkomen met header)
+        # zet kolombreedtes voor leesbaarheid
         widths = [12, 18, 24, 12, 24, 16, 16, 14, 12, 18, 16, 32, 32, 12, 16, 16, 18]
         for i, w in enumerate(widths, start=1):
             ws.column_dimensions[chr(64 + i)].width = w
 
-        for idx, k in enumerate(klachten, start=2):  # data rows start at 2
+        for idx, k in enumerate(klachten, start=2):  # data rows start bij 2
             try:
                 klacht_id = k.get('klacht_id')
                 verteg_id = k.get('verantwoordelijke_id') or k.get('vertegenwoordiger_id')
@@ -2045,18 +2041,18 @@ def klachten_export():
                 ws.append(row)
 
             except Exception as e:
-                print(f"Warning: failed to write row for klacht {k.get('klacht_id')}: {e}")
+                print(f"Waarschuwing: kon rij niet schrijven voor klacht {k.get('klacht_id')}: {e}")
 
-        # Add table styling
+        # Voeg tabel styling toe
         try:
             table = Table(displayName="KlachtenTable", ref=f"A1:Q{ws.max_row}")
             style = TableStyleInfo(name="TableStyleMedium9", showFirstColumn=False, showLastColumn=False, showRowStripes=True, showColumnStripes=False)
             table.tableStyleInfo = style
             ws.add_table(table)
         except Exception as e:
-            print(f"Warning: could not add table styling: {e}")
+            print(f"Waarschuwing: kon tabel styling niet toevoegen: {e}")
 
-        # Build response with timestamped filename
+        # Bouw response met timestamp in bestandsnaam
         bio = io.BytesIO()
         wb.save(bio)
         bio.seek(0)
@@ -2067,7 +2063,7 @@ def klachten_export():
         return response
 
     except Exception as e:
-        print(f"Exception in klachten_export: {e}")
+        print(f"Fout in klachten_export: {e}")
         traceback.print_exc()
         flash('Er ging iets mis bij het exporteren van klachten', 'error')
         return redirect(url_for('main.user_klachten'))

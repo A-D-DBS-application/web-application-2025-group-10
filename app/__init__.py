@@ -6,17 +6,13 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
     
-    # Check configuratie en geef waarschuwingen
+    # Dit checkt de configuratie en geef waarschuwingen
     Config.check_config()
     
-    # Initialize DB if you use it; this makes db available
+    # Start DB als je het gebruikt
     db.init_app(app)
     
     from .routes import main
     app.register_blueprint(main)
-    
-    # Optional: create DB tables in development - only if needed
-    # with app.app_context():
-    #     db.create_all()
     
     return app
