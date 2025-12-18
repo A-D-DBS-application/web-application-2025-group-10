@@ -12,9 +12,8 @@ import os
 import uuid
 
 
-# ============================
 # BUSINESSUNIT SERVICES
-# ============================
+
 
 def get_businessunit_by_id(bu_id):
     """Haal businessunit op via ID."""
@@ -57,7 +56,7 @@ def resolve_or_create_businessunit(value):
         return None
     
     try:
-        # Zoek bestaande
+        # Zoeken
         existing = db.session.query(Businessunit).filter_by(naam=naam).first()
         if existing:
             return existing.businessunit_id
@@ -73,16 +72,16 @@ def resolve_or_create_businessunit(value):
         return None
 
 
-# ============================
+
 # GEBRUIKER SERVICES
-# ============================
+
 
 def get_user_by_email(email):
     """Haal gebruiker op via email (case-insensitive)."""
     if not email:
         return None
     try:
-        # Case-insensitive search
+        # Zoeken maar negeren van hoofdletters 
         return db.session.query(Gebruiker).filter(
             db.func.lower(Gebruiker.email) == db.func.lower(email.strip())
         ).first()
@@ -126,9 +125,9 @@ def get_all_users():
         return []
 
 
-# ============================
+
 # KLANT SERVICES
-# ============================
+
 
 def get_klant_by_id(klant_id):
     """Haal klant op via ID."""
@@ -177,9 +176,9 @@ def create_klant(klantnaam):
         return None
 
 
-# ============================
+
 # PRODUCT SERVICES
-# ============================
+
 
 def get_product_by_artikelnummer(artikel_nr):
     """Haal product op via artikelnummer."""
@@ -205,12 +204,12 @@ def ensure_product_exists(artikelnummer, artikelnaam=None):
         return None
     
     try:
-        # Check of bestaat
+        # Checken of het bestaat
         product = get_product_by_artikelnummer(artikel_nr)
         if product:
             return artikel_nr
         
-        # Maak nieuw aan
+        # Een nieuwe aanmaken
         naam = artikelnaam.strip() if artikelnaam else f"Product {artikel_nr}"
         new_product = Product(artikel_nr=artikel_nr, naam=naam)
         db.session.add(new_product)
@@ -222,9 +221,9 @@ def ensure_product_exists(artikelnummer, artikelnaam=None):
         return artikel_nr
 
 
-# ============================
+
 # ORDER SERVICES
-# ============================
+
 
 def get_order_by_nummer(order_nummer):
     """Haal order op via ordernummer."""
@@ -241,12 +240,12 @@ def ensure_order_exists(order_nummer, klant_id=None):
     if not order_nummer:
         return None
     try:
-        # Check of bestaat
+        # Checken als het bestaat
         order = get_order_by_nummer(order_nummer)
         if order:
             return order_nummer
         
-        # Maak nieuw aan
+        # Een nieuwe aanmaken
         new_order = Order(order_nummer=str(order_nummer))
         if klant_id:
             try:
@@ -280,9 +279,8 @@ def get_all_products():
         return []
 
 
-# ============================
 # PROBLEEMCATEGORIE SERVICES
-# ============================
+
 
 def get_categorieen_list():
     """Haal alle categorieën op met ID en type."""
@@ -308,9 +306,9 @@ def get_categorie_by_id(categorie_id):
         return None
 
 
-# ============================
+
 # KLACHT SERVICES
-# ============================
+
 
 def get_klacht_by_id(klacht_id):
     """Haal klacht op via ID met alle relaties."""
@@ -332,7 +330,7 @@ def get_klachten_for_user(user_id, role, businessunit_id=None):
             query = query.filter_by(verantwoordelijke_id=user_id)
         elif role == 'Key user' and businessunit_id:
             query = query.filter_by(businessunit_id=businessunit_id)
-        # Admin ziet alles, geen filter
+        # Admin ziet alles, dus geen filter
         
         return query.order_by(Klacht.datum_melding.desc()).all()
     except Exception as e:
@@ -357,9 +355,9 @@ def get_all_klachten():
         return []
 
 
-# ============================
+
 # STATUSHISTORIEK SERVICES
-# ============================
+
 
 def get_statushistoriek_for_klacht(klacht_id):
     """Haal statushistoriek op voor een klacht."""

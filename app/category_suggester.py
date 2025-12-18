@@ -3,7 +3,7 @@ from typing import Dict, List
 
 from .models import Klacht, Probleemcategorie, db
 
-# Kernwoorden per probleemcategorie; eenvoudig uitbreidbaar
+# Woorden die bij elke categorie horen
 CATEGORY_KEYWORDS: Dict[str, List[str]] = {
     "Technisch": [
         "constructie",
@@ -59,7 +59,7 @@ CATEGORY_KEYWORDS: Dict[str, List[str]] = {
 
 
 def _normalize_text(value: str) -> str:
-    """Lowercase en verwijder leestekens/extra spaties."""
+    """Maak kleine letters en verwijder leestekens."""
     if not value:
         return ""
     lowered = value.lower()
@@ -70,12 +70,12 @@ def _normalize_text(value: str) -> str:
 
 def suggest_probleemcategorie(klacht_omschrijving: str, mogelijke_oorzaak: str) -> str:
     """
-    Stel een probleemcategorie voor op basis van sleutelwoorden in de gecombineerde tekst.
+    Doe voorstel voor probleemcategorie via sleutelwoorden.
 
-    - combineert klacht_omschrijving en mogelijke_oorzaak
-    - normaliseert de tekst
-    - telt keyword hits per categorie
-    - retourneert de categorie met hoogste score of 'Andere' als er geen matches zijn
+    - voeg klacht en oorzaak samen
+    - maak tekst netjes
+    - tel keyword matches per categorie
+    - geef categorie met hoogste score terug, anders 'Andere'
     """
     combined = " ".join(
         part for part in [_normalize_text(klacht_omschrijving), _normalize_text(mogelijke_oorzaak)] if part
@@ -88,12 +88,12 @@ def suggest_probleemcategorie(klacht_omschrijving: str, mogelijke_oorzaak: str) 
     for categorie, keywords in CATEGORY_KEYWORDS.items():
         score = 0
         for keyword in keywords:
-            # Gebruik word boundaries zodat we hele woorden meten
+            # Zoek naar hele woorden
             pattern = r"\b" + re.escape(keyword.lower()) + r"\b"
             score += len(re.findall(pattern, combined))
         scores[categorie] = score
 
-    # Kies categorie met hoogste score; fallback naar "Andere" bij 0 hits
+    # Kies categorie met meeste matches; anders 'Andere'
     best_categorie = max(scores.items(), key=lambda item: item[1])[0]
     if scores.get(best_categorie, 0) == 0:
         return "Andere"
@@ -104,20 +104,20 @@ def suggest_probleemcategorie_contextual_sqlalchemy(
     omschrijving: str, oorzaak: str, businessunit_id: int = None
 ) -> str:
     """
-    Geef een voorstel voor een probleemcategorie op basis van:
-    1. trefwoordenanalyse;
-    2. historische frequentie binnen dezelfde businessunit;
-    3. recentste klacht (datum_melding + hoogste klacht_id).
+    Doe voorstel voor probleemcategorie op basis van:
+    1. zoekwoorden in tekst;
+    2. wat vaak voorkomt inzelfde businessunit;
+    3. meest recente klacht.
     """
-    # 1) combineer en normaliseer tekst
+    # 1) voeg tekst samen en maak netjes
     combined = " ".join(
         part for part in [_normalize_text(omschrijving), _normalize_text(oorzaak)] if part
     ).strip()
     if not combined:
         return "Andere"
 
-    # 2) keyword scores
-    # Sla "Andere" over in de telling (heeft geen keywords); enkel positieve scores mogen verder.
+    # 2) tel keyword matches
+    # Sla 'Andere' over (heeft geen sleutelwoorden)
     scores: Dict[str, int] = {}
     for categorie, keywords in CATEGORY_KEYWORDS.items():
         if not keywords:
@@ -132,12 +132,12 @@ def suggest_probleemcategorie_contextual_sqlalchemy(
     if max_score == 0:
         return "Andere"
 
-    # Alleen categorieën met een positieve score zijn kandidaten
+    # Alleen categorieën met minstens één match
     candidates = [cat for cat, sc in scores.items() if sc == max_score and sc > 0]
     if len(candidates) == 1:
         return candidates[0]
 
-    # 3) Historische frequentie binnen businessunit
+    # 3) Kijk wat vaak voorkomt in deze businessunit
     freq: Dict[str, int] = {}
     for cat in candidates:
         pc = Probleemcategorie.query.filter_by(type=cat).first()
@@ -154,7 +154,7 @@ def suggest_probleemcategorie_contextual_sqlalchemy(
     if len(freq_candidates) == 1 and max_freq > 0:
         return freq_candidates[0]
 
-    # 4) Tie-breaker: meest recent via hoogste klacht_id (proxy voor meest recent)
+    # 4) Bij gelijkspel: kijk naar meest recente klacht
     latest_cat = None
     latest_date = None
     latest_id = None
@@ -175,5 +175,5 @@ def suggest_probleemcategorie_contextual_sqlalchemy(
                     latest_id = k_id
                     latest_cat = cat
 
-    # 5) Veilige fallback
+    # 5) Altijd een antwoord teruggeven
     return latest_cat or "Andere"

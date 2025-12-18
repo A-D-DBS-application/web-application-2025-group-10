@@ -54,7 +54,7 @@
                                 <option value="{{ klant.klantnaam }}" data-id="{{ klant.klant_id }}"></option>
                             {% endfor %}
                         </datalist>
-                        <!-- Sectie voor nieuwe klant (ondernemingsnummer t.e.m. adres) verwijderd op verzoek -->
+                        
                     </div>
 
                     <div class="form-group full-width">
@@ -77,7 +77,7 @@
                         </datalist>
                     </div>
 
-                    <!-- Artikelnaam removed: only existing artikelnummers allowed -->
+                    
 
                     <div class="form-group">
                         <label for="aantal_eenheden" class="required">Aantal eenheden</label>
@@ -180,7 +180,7 @@
                 mogelijke_oorzaak: mogelijkeOorzaakInput ? mogelijkeOorzaakInput.value : ''
             };
 
-            // Geen request versturen als beide velden leeg zijn
+            
             if (!payload.klacht_omschrijving && !payload.mogelijke_oorzaak) {
                 return;
             }
@@ -262,7 +262,7 @@
 
         function setNewCustomerMode(enabled) {
             if (!isNewCustomerInput) return;
-            // Nieuwe klanten aanmaken via dit formulier is uitgeschakeld
+            
             isNewCustomerInput.value = 'false';
         }
 
@@ -280,7 +280,7 @@
             if (!orderInput || !orderDatalist || !klantNaamInput || !klantIdHidden) return false;
             const match = Array.from(orderDatalist.options).find(opt => String(opt.value) === String(orderInput.value));
             if (match) {
-                // Auto-fill klant fields from the selected order
+                
                 const kid = match.dataset.klantid || '';
                 const kname = match.dataset.klantnaam || '';
                 klantIdHidden.value = kid;
@@ -289,16 +289,16 @@
                 }
                 return true;
             } else {
-                // If no matching order, clear klant selection
+                
                 klantIdHidden.value = '';
                 if (klantNaamInput) {
-                    // leave manual input available
+                    
                 }
                 return false;
             }
         }
 
-        // Artikelnaam removed: only existing product numbers allowed; validation performed on submit
+        
 
         requiredFields.forEach(field => {
             field.addEventListener('blur', function() {
@@ -333,7 +333,7 @@
                     klantIdHidden.value = match.dataset.id || '';
                 }
             }
-            // Order must match existing
+            
             if (orderInput && orderDatalist) {
                 const matchOrder = Array.from(orderDatalist.options).find(opt => String(opt.value) === String(orderInput.value));
                 if (!matchOrder) {
@@ -341,7 +341,7 @@
                     alert('Kies een bestaand ordernummer uit de lijst.');
                 }
             }
-            // Artikel must match existing
+            g
             if (artikelInput && productenDatalist) {
                 const matchArt = Array.from(productenDatalist.options).find(opt => String(opt.value) === String(artikelInput.value));
                 if (!matchArt) {
@@ -363,10 +363,10 @@
             orderInput.addEventListener('change', syncOrderSelection);
             orderInput.addEventListener('blur', syncOrderSelection);
         }
-        // Init state
+        
         syncKlantSelection();
         syncOrderSelection();
-        // no initial artikelnaam sync (field removed)
+        
         if (isNewCustomerInput && isNewCustomerInput.value === 'true') {
             setNewCustomerMode(true);
         }
@@ -377,7 +377,7 @@
         if (mogelijkeOorzaakInput) {
             mogelijkeOorzaakInput.addEventListener('input', scheduleCategorySuggestion);
         }
-        // Initieel invullen als er al tekst aanwezig is (bij herladen met errors)
+        
         fetchCategorySuggestion();
     });
 </script>

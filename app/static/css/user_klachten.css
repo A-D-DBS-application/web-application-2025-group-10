@@ -30,15 +30,15 @@ body.page-user-klachten .klachten-table th { background: var(--green-main); colo
 body.page-user-klachten .klachten-table tr:hover { background: var(--green-soft); }
 body.page-user-klachten .klachten-table .col-id { width: 60px; max-width: 60px; }
 body.page-user-klachten .klachten-table .col-date { width: 120px; max-width: 120px; font-size: 13px; }
-/* Prioriteit kolom - HEADER naar links, INHOUD naar rechts */
+
 body.page-user-klachten .klachten-table .col-prioriteit { width: 120px; max-width: 120px; }
 body.page-user-klachten .klachten-table th.col-prioriteit { text-align: left; padding-left: 12px; padding-right: 12px; }
 body.page-user-klachten .klachten-table td.col-prioriteit { text-align: right; padding-left: 0; padding-right: 12px; display: block; }
-/* Status kolom - HEADER naar links, INHOUD naar rechts */
+
 body.page-user-klachten .klachten-table .col-status { width: 100px; max-width: 100px; }
 body.page-user-klachten .klachten-table th.col-status { text-align: left; padding-left: 12px; padding-right: 12px; }
 body.page-user-klachten .klachten-table td.col-status { text-align: right; padding-left: 0; padding-right: 12px; }
-/* Acties kolom - blijft gecentreerd */
+
 body.page-user-klachten .klachten-table .col-actions { width: 150px; max-width: 150px; text-align: center; }
 body.page-user-klachten .action-link { padding: 10px 18px; font-size: 13px; height: 40px; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; background: var(--green-main); color: white; border-radius: 8px; border: none; transition: all 0.3s ease; }
 body.page-user-klachten .action-link:hover { background: var(--green-dark); transform: translateY(-2px); }

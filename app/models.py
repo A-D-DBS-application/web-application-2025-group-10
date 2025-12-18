@@ -4,16 +4,16 @@ from datetime import datetime
 
 db = SQLAlchemy()
 
-# ============================
+
 # ENUM TYPES
-# ============================
+
 probleem_type_enum = ENUM('Technisch', 'Esthetisch', 'Service/Levering', 'Andere', name='probleem_type', create_type=False)
 klacht_status_enum = ENUM('Ingediend', 'Goedgekeurd', 'Afgewezen', 'In behandeling', 'Afgehandeld', name='klacht_status', create_type=False)
 gebruikersrol_enum = ENUM('Admin', 'Key user', 'User', name='gebruikersrol', create_type=False)
 
-# ============================
+
 # MODELS
-# ============================
+
 
 class Businessunit(db.Model):
     __tablename__ = 'businessunit'
@@ -101,7 +101,7 @@ class Klacht(db.Model):
     datum_laatst_bewerkt = db.Column(db.DateTime(timezone=True), default=datetime.utcnow)
     businessunit_id = db.Column(db.BigInteger, db.ForeignKey('businessunit.businessunit_id', onupdate='CASCADE'))
     aantal_eenheden = db.Column(db.SmallInteger)
-    artikelnummer = db.Column(db.String(255), db.ForeignKey('product.artikel_nr', ondelete='SET NULL'))
+    artikelnummer = db.Column(db.Text, db.ForeignKey('product.artikel_nr', ondelete='SET NULL'))
 
     # Relatie naar statushistoriek
     statushistoriek = db.relationship('StatusHistoriek', backref='klacht', lazy=True, cascade='all, delete')
@@ -109,7 +109,7 @@ class Klacht(db.Model):
     # Relatie naar product (via artikelnummer)
     product = db.relationship('Product', backref='klachten', lazy=True, foreign_keys=[artikelnummer])
     
-    # Relatie naar order (via order_nummer)
+    # Relatie naar order (via ordernummer)
     order = db.relationship('Order', backref='klachten', lazy=True, foreign_keys=[order_nummer])
     
     # Relatie naar businessunit
@@ -132,7 +132,7 @@ class StatusHistoriek(db.Model):
 
 class Product(db.Model):
     __tablename__ = 'product'
-    artikel_nr = db.Column(db.String(255), primary_key=True)
+    artikel_nr = db.Column(db.Text, primary_key=True)
     naam = db.Column(db.String(255), nullable=False)
 
     def __repr__(self):
@@ -143,7 +143,7 @@ class Product(db.Model):
 class Producten_Order(db.Model):
     __tablename__ = 'producten_order'
     order_nummer = db.Column(db.String(255), db.ForeignKey('order.order_nummer'), primary_key=True, nullable=False)
-    artikel_nr = db.Column(db.String(255), db.ForeignKey('product.artikel_nr'), primary_key=True, nullable=False)
+    artikel_nr = db.Column(db.Text, db.ForeignKey('product.artikel_nr'), primary_key=True, nullable=False)
     aantal = db.Column(db.Integer, nullable=False)
 
     order = db.relationship('Order', backref='product_orders', lazy=True, overlaps="orders,producten")
