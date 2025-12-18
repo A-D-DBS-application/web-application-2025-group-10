@@ -20,7 +20,7 @@ https://drive.google.com/file/d/18SfOilAF-qQdakuNF6ZnbS-BkI-KCpPV/view?pli=1
 
 Other:
 
-How to run the app locally
+How to run the app locally - enter the following in the terminal
 - Create and activate a virtual environment:
   - Windows:
       python -m venv venv
@@ -28,8 +28,9 @@ How to run the app locally
   - macOS / Linux:
       python3 -m venv venv
       source venv/bin/activate
-- Install dependencies (example):
-      pip install Flask werkzeug supabase-py openpyxl pillow requests psycopg2-binary
+- Install dependencies:
+      pip install -r requirements.txt
+      or pip install Flask werkzeug supabase-py openpyxl pillow requests psycopg2-binary
 - Start the app:
       python run.py
 - Open the app in your browser:
