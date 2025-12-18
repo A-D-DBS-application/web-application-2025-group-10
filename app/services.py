@@ -186,8 +186,11 @@ def get_product_by_artikelnummer(artikel_nr):
     if not artikel_nr:
         return None
     try:
-        artikel_nr_int = int(artikel_nr) if isinstance(artikel_nr, str) else artikel_nr
-        return db.session.get(Product, artikel_nr_int)
+        # Convert to string to ensure consistency
+        artikel_nr_str = str(artikel_nr).strip() if artikel_nr else None
+        if not artikel_nr_str:
+            return None
+        return db.session.get(Product, artikel_nr_str)
     except (ValueError, TypeError):
         return None
 
@@ -196,10 +199,10 @@ def ensure_product_exists(artikelnummer, artikelnaam=None):
     """Zorg dat product bestaat, maak aan indien nodig."""
     if not artikelnummer:
         return None
-    try:
-        artikel_nr = int(artikelnummer) if isinstance(artikelnummer, str) else artikelnummer
-    except (ValueError, TypeError):
-        artikel_nr = artikelnummer
+    # Convert to string to ensure consistency
+    artikel_nr = str(artikelnummer).strip() if artikelnummer else None
+    if not artikel_nr:
+        return None
     
     try:
         # Check of bestaat

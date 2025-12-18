@@ -1161,7 +1161,7 @@ def klacht_aanmaken():
                 klant_id=int(klant_id),
                 categorie_id=int(categorie_id),
                 order_nummer=order_nummer,
-                artikelnummer=safe_int(artikelnummer) if artikelnummer else None,
+                artikelnummer=str(artikelnummer).strip() if artikelnummer else None,
                 aantal_eenheden=safe_int(aantal_eenheden) if aantal_eenheden else None,
                 mogelijke_oorzaak=mogelijke_oorzaak or None,
                 bijlages=None,  # Eerst op None, upload komt later
@@ -1809,7 +1809,7 @@ def klacht_bewerken(klacht_id):
         
         # Update klacht via ORM
         klacht.order_nummer = order_nummer or None
-        klacht.artikelnummer = safe_int(artikelnummer) if artikelnummer else None
+        klacht.artikelnummer = str(artikelnummer).strip() if artikelnummer else None
         klacht.aantal_eenheden = safe_int(aantal_eenheden) if aantal_eenheden else None
         klacht.categorie_id = int(categorie_id)
         klacht.mogelijke_oorzaak = mogelijke_oorzaak or None
