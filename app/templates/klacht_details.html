@@ -147,7 +147,7 @@
                 </div>
             </div>
 
-            {% if klacht.bijlages %}
+            {% if klacht.bijlages and klacht.bijlages|length > 0 %}
             <div class="detail-row">
                 <div class="detail-label">Bijlagen:</div>
                 <div class="detail-value">
@@ -156,10 +156,13 @@
                             {% set bijlage_id = bijlage.get('id') if bijlage is mapping and bijlage.get('id') else loop.index %}
                             {% set bijlage_url = bijlage.get('url') if bijlage is mapping and bijlage.get('url') else (bijlage if bijlage is string else '') %}
                             {% set bijlage_naam = bijlage.get('naam') if bijlage is mapping and bijlage.get('naam') else (bijlage_url.split('/')[-1] if bijlage_url and '/' in bijlage_url else ('bijlage_' ~ loop.index)) %}
+                            {% if bijlage_url %}
                             <div class="attachment-row" id="bijlage-row-{{ bijlage_id }}">
                                 <div class="attachment-meta">
-                                    {% if bijlage_url and (bijlage_url.lower().endswith('.png') or bijlage_url.lower().endswith('.jpg') or bijlage_url.lower().endswith('.jpeg') or bijlage_url.lower().endswith('.gif') or bijlage_url.lower().endswith('.webp')) %}
-                                        <img src="{{ bijlage_url }}" alt="{{ bijlage_naam }}" style="max-width: 200px; max-height: 200px; border-radius: 8px; object-fit: cover;">
+                                    {% set is_image = bijlage.get('is_image', False) or (bijlage_url.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')) or 'image' in (bijlage.get('content_type', '') or '').lower()) %}
+                                    {% if is_image %}
+                                        <img src="{{ bijlage_url }}" alt="{{ bijlage_naam }}" style="max-width: 200px; max-height: 200px; border-radius: 8px; object-fit: cover; cursor: pointer;" onclick="window.open('{{ bijlage_url }}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                                        <a href="{{ bijlage_url }}" target="_blank" style="display:none;" class="attachment-link">{{ bijlage_naam }}</a>
                                     {% else %}
                                         <a href="{{ bijlage_url }}" target="_blank" aria-label="Open bijlage {{ bijlage_naam }}" class="attachment-link">{{ bijlage_naam }}</a>
                                     {% endif %}
@@ -169,6 +172,7 @@
                                     <button type="button" class="undo-btn" style="display:none;" onclick="toggleDelete('{{ bijlage_id }}', true)">Ongedaan</button>
                                 </div>
                             </div>
+                            {% endif %}
                         {% endfor %}
                     </div>
                 </div>

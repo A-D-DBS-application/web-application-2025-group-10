@@ -5,6 +5,7 @@ import os
 import base64
 import uuid
 import traceback
+import requests
 from datetime import datetime, date, timezone
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
@@ -13,6 +14,7 @@ from openpyxl.drawing.image import Image as XLImage
 from openpyxl.worksheet.table import Table, TableStyleInfo
 import re
 from sqlalchemy.exc import IntegrityError
+import requests
 from .category_suggester import (
     suggest_probleemcategorie,
     suggest_probleemcategorie_contextual_sqlalchemy,
@@ -22,12 +24,29 @@ from .models import (
     StatusHistoriek, Product, Order, db, klacht_status_enum
 )
 from . import services
+from .config import Config
 
 main = Blueprint('main', __name__)
 
-# Lokale file storage directory
+# Lokale file storage directory (fallback, niet meer gebruikt voor nieuwe uploads)
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt'}
+
+# Helper: Check Supabase configuratie
+def check_supabase_config():
+    """Controleer of Supabase configuratie correct is."""
+    if not Config.SUPABASE_KEY or Config.SUPABASE_KEY.strip() == '':
+        print("ERROR: SUPABASE_KEY is niet ingesteld!")
+        return False
+    if not Config.SUPABASE_URL or Config.SUPABASE_URL.strip() == '':
+        print("ERROR: SUPABASE_URL is niet ingesteld!")
+        return False
+    return True
+
+# Helper: Genereer publieke URL voor Supabase Storage
+def get_supabase_public_url(storage_path):
+    """Genereer publieke URL voor bestand in Supabase Storage."""
+    return f"{Config.SUPABASE_URL}/storage/v1/object/public/{Config.SUPABASE_STORAGE_BUCKET}/{storage_path}"
 
 
 @main.route('/')
@@ -36,7 +55,9 @@ def index():
 
 @main.route('/uploads/<path:filename>')
 def uploaded_file(filename):
-    """Serve uploaded files."""
+    """Serve uploaded files (fallback voor oude lokale bestanden)."""
+    # Deze route is alleen voor backwards compatibility met oude lokale bestanden
+    # Nieuwe uploads gaan naar Supabase Storage en worden via publieke URLs geserveerd
     upload_path = ensure_upload_dir()
     return send_from_directory(upload_path, filename)
 
@@ -212,7 +233,19 @@ def fetch_image_bytes(url):
                 b64 = url.split(';base64,', 1)[1]
                 return base64.b64decode(b64)
             return None
-        # Lokale file URL: /uploads/...
+        
+        # Supabase Storage URL
+        if 'supabase.co' in url or 'supabase' in url.lower():
+            try:
+                import requests
+                response = requests.get(url, timeout=10)
+                if response.status_code == 200:
+                    return response.content
+            except Exception as e:
+                print(f"Error fetching from Supabase URL: {e}")
+            return None
+        
+        # Lokale file URL: /uploads/... (fallback voor oude bestanden)
         if url.startswith('/uploads/') or url.startswith('uploads/'):
             upload_path = ensure_upload_dir()
             filename = url.split('/')[-1]
@@ -303,12 +336,30 @@ def normalize_bijlages(raw_bijlages):
         unique_urls.add(url)
         
         url_lower = url.lower()
-        is_img = url.startswith('data:image') or url_lower.endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp'))
+        # Check of het een image is: data URL, extensie, of Supabase URL met image extensie
+        is_img = (url.startswith('data:image') or 
+                 url_lower.endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')) or
+                 ('supabase' in url_lower and any(ext in url_lower for ext in ['.png', '.jpg', '.jpeg', '.gif', '.webp'])))
+        
+        # Extract bestandsnaam uit URL
+        if '/' in url:
+            naam = url.split("/")[-1]
+            # Als Supabase URL, probeer bestandsnaam uit path te halen
+            if 'supabase' in url_lower and '/' in url:
+                # Format: .../public/bucket/path/to/filename.ext
+                parts = url.split('/')
+                # Zoek naar het laatste deel met een extensie
+                for part in reversed(parts):
+                    if any(part.lower().endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.pdf']):
+                        naam = part
+                        break
+        else:
+            naam = url
         
         normalized.append({
             "id": str(uuid.uuid4()),
             "url": url,
-            "naam": url.split("/")[-1] if "/" in url else url,
+            "naam": naam,
             "is_image": is_img
         })
         
@@ -673,7 +724,11 @@ def klacht_details(klacht_id):
                 vertegenw = []
         
         # Normalizeer bijlages
-        klacht_data['bijlages'] = normalize_bijlages(klacht_data.get('bijlages'))
+        raw_bijlages = klacht_data.get('bijlages')
+        print(f"DEBUG: Raw bijlages voor klacht {klacht_id}: {raw_bijlages}")
+        normalized_bijlages = normalize_bijlages(raw_bijlages)
+        print(f"DEBUG: Genormaliseerde bijlages voor klacht {klacht_id}: {normalized_bijlages}")
+        klacht_data['bijlages'] = normalized_bijlages
 
         return render_template(
             'klacht_details.html',
@@ -695,16 +750,16 @@ def klacht_details(klacht_id):
         return redirect(url_for('main.user_klachten'))
 
 
-# Helper: upload one file to local storage and return bijlage dict (met URL)
+# Helper: upload one file to Supabase Storage and return bijlage dict (met URL)
 def upload_file_to_storage(file_obj, store_in_db=False, klacht_id=None, klant_naam=None, klant_id_val=None, businessunit_name=None):
-    """Upload file naar lokale storage en retourneer bijlage dict met URL."""
+    """Upload file naar Supabase Storage en retourneer bijlage dict met URL."""
     if not file_obj or not getattr(file_obj, 'filename', None):
         return None
     try:
         safe_name = secure_filename(file_obj.filename)
         unique_id = str(uuid.uuid4())
         
-        # Bepaal directory structuur
+        # Bepaal directory structuur (zoals in Supabase bucket)
         bu_part = secure_filename(businessunit_name.replace(' ', '_')) if businessunit_name else "OnbekendeBU"
         if klant_naam:
             klant_part = secure_filename(klant_naam).replace(' ', '_')[:15]
@@ -712,14 +767,11 @@ def upload_file_to_storage(file_obj, store_in_db=False, klacht_id=None, klant_na
             klant_part = "OnbekendeKlant"
         klacht_part = f"Klacht_{klacht_id}" if klacht_id else "TEMP"
         
-        # Maak directory structuur
-        upload_path = ensure_upload_dir()
-        file_dir = os.path.join(upload_path, bu_part, klant_part, klacht_part)
-        os.makedirs(file_dir, exist_ok=True)
-        
         # Bestandsnaam met UUID
         filename = f"{unique_id}_{safe_name}"
-        filepath = os.path.join(file_dir, filename)
+        
+        # Pad in Supabase Storage bucket
+        storage_path = f"{bu_part}/{klant_part}/{klacht_part}/{filename}"
         
         content_type = getattr(file_obj, 'mimetype', 'application/octet-stream')
         
@@ -734,29 +786,83 @@ def upload_file_to_storage(file_obj, store_in_db=False, klacht_id=None, klant_na
         else:
             file_bytes = file_obj.get('bytes', b'')
         
-        # Sla lokaal op
-        with open(filepath, 'wb') as f:
-            f.write(file_bytes)
-        
-        # Relatieve URL voor template
-        relative_url = f"/uploads/{bu_part}/{klant_part}/{klacht_part}/{filename}"
-        
-        bijlage = {
-            "id": unique_id,
-            "url": relative_url,
-            "naam": safe_name,
-            "content_type": content_type,
-            "upload_date": datetime.utcnow().isoformat()
-        }
-        return bijlage
+        # Upload naar Supabase Storage via directe HTTP request
+        if check_supabase_config():
+            try:
+                print(f"DEBUG: Probeer bestand te uploaden naar Supabase: {storage_path}")
+                print(f"DEBUG: Bucket: {Config.SUPABASE_STORAGE_BUCKET}, File size: {len(file_bytes)} bytes")
+                
+                # Supabase Storage API endpoint voor upload
+                upload_url = f"{Config.SUPABASE_URL}/storage/v1/object/{Config.SUPABASE_STORAGE_BUCKET}/{storage_path}"
+                
+                # Headers voor Supabase Storage API
+                headers = {
+                    "Authorization": f"Bearer {Config.SUPABASE_KEY}",
+                    "Content-Type": content_type,
+                    "x-upsert": "false"  # Voorkom overschrijven van bestaande bestanden
+                }
+                
+                # Upload bestand via HTTP POST
+                response = requests.post(
+                    upload_url,
+                    data=file_bytes,
+                    headers=headers,
+                    timeout=30
+                )
+                
+                print(f"DEBUG: Upload response status: {response.status_code}")
+                print(f"DEBUG: Upload response: {response.text[:200] if response.text else 'No response body'}")
+                
+                if response.status_code in [200, 201]:
+                    # Haal publieke URL op
+                    public_url = get_supabase_public_url(storage_path)
+                    print(f"DEBUG: Publieke URL gegenereerd: {public_url}")
+                    
+                    bijlage = {
+                        "id": unique_id,
+                        "url": public_url,  # Publieke Supabase URL
+                        "naam": safe_name,
+                        "content_type": content_type,
+                        "upload_date": datetime.utcnow().isoformat(),
+                        "storage_path": storage_path  # Bewaar pad voor verwijderen
+                    }
+                    print(f"SUCCESS: Bestand succesvol geüpload naar Supabase Storage: {storage_path}")
+                    return bijlage
+                else:
+                    error_response = response.text
+                    if "row-level security policy" in error_response.lower():
+                        error_msg = (
+                            f"Supabase Storage upload mislukt: Row Level Security (RLS) policy blokkeert upload. "
+                            f"Oplossing: Gebruik de service_role key in plaats van anon key, of pas de RLS policies aan in Supabase Dashboard. "
+                            f"Status: {response.status_code}, Response: {error_response}"
+                        )
+                    else:
+                        error_msg = f"Supabase upload failed met status {response.status_code}: {error_response}"
+                    print(f"ERROR: {error_msg}")
+                    raise Exception(error_msg)
+                    
+            except Exception as e:
+                print(f"ERROR: Supabase upload error: {e}")
+                print(f"ERROR: Error type: {type(e).__name__}")
+                traceback.print_exc()
+                # Geen fallback meer - gooi error door zodat gebruiker weet dat upload faalde
+                raise Exception(f"Upload naar Supabase Storage mislukt: {str(e)}")
+        else:
+            # Geen fallback meer - gooi error als configuratie niet correct is
+            error_msg = "Supabase configuratie niet correct. Upload naar Supabase Storage is vereist."
+            print(f"ERROR: {error_msg}")
+            raise Exception(error_msg)
+            
     except Exception as e:
         print(f"Upload error: {e}")
         traceback.print_exc()
         return None
 
-# Helper: delete file from local storage
+# Lokale fallback functie verwijderd - uploads moeten altijd naar Supabase Storage gaan
+
+# Helper: delete file from Supabase Storage (of lokale storage als fallback)
 def delete_file_from_storage(file_url):
-    """Verwijder file uit lokale storage."""
+    """Verwijder file uit Supabase Storage of lokale storage."""
     try:
         if not file_url:
             return None
@@ -764,7 +870,41 @@ def delete_file_from_storage(file_url):
         if file_url.startswith('data:'):
             return None
         
-        # Parse URL: /uploads/bu/klant/klacht/filename
+        # Check of het een Supabase URL is
+        if 'supabase.co' in file_url or 'supabase' in file_url.lower():
+            # Parse Supabase URL om storage path te krijgen
+            # Format: https://[project].supabase.co/storage/v1/object/public/bijlages/path/to/file
+            try:
+                # Extract path na /public/bijlages/
+                if '/public/' in file_url:
+                    path_part = file_url.split('/public/')[1]
+                    if '/' in path_part:
+                        # Skip bucket name (eerste deel na /public/)
+                        parts = path_part.split('/', 1)
+                        storage_path = parts[1] if len(parts) > 1 else path_part
+                    else:
+                        storage_path = path_part
+                    
+                    # Verwijder via directe HTTP DELETE request
+                    if check_supabase_config():
+                        delete_url = f"{Config.SUPABASE_URL}/storage/v1/object/{Config.SUPABASE_STORAGE_BUCKET}/{storage_path}"
+                        headers = {
+                            "Authorization": f"Bearer {Config.SUPABASE_KEY}"
+                        }
+                        response = requests.delete(delete_url, headers=headers, timeout=30)
+                        
+                        if response.status_code in [200, 204]:
+                            print(f"SUCCESS: Bestand verwijderd uit Supabase Storage: {storage_path}")
+                            return True
+                        else:
+                            print(f"ERROR: Supabase delete failed met status {response.status_code}: {response.text}")
+                            return None
+            except Exception as e:
+                print(f"ERROR: Supabase delete error: {e}")
+                traceback.print_exc()
+                return None
+        
+        # Fallback: lokale storage verwijderen
         if file_url.startswith('/uploads/'):
             file_url = file_url[1:]  # Remove leading /
         
@@ -1059,7 +1199,11 @@ def klacht_aanmaken():
                     if uploaded:
                         bijlages_uploaded.append(uploaded)
                 except Exception as e:
-                    print(f"DEBUG - Error uploading file {file_data['filename']} after insert: {e}")
+                    error_msg = f"Fout bij uploaden van bestand '{file_data['filename']}': {str(e)}"
+                    print(f"ERROR - {error_msg}")
+                    flash(error_msg, 'error')
+                    # Stop de hele operatie als upload faalt - geen lokale fallback meer
+                    raise Exception(f"Upload van bijlage mislukt: {str(e)}")
             
             # 6. Update de klacht met bijlage-URL's (als er bijlages zijn)
             if bijlages_uploaded:
@@ -1637,16 +1781,23 @@ def klacht_bewerken(klacht_id):
             for nf in new_files:
                 if nf and nf.filename:
                     # upload_file_to_storage retourneert een dict met de URL
-                    uploaded = upload_file_to_storage(
-                        nf,
-                        store_in_db=False,
-                        klacht_id=klacht_id,
-                        klant_naam=klacht.klant.klantnaam if klacht.klant else None,
-                        klant_id_val=klant_id_existing,
-                        businessunit_name=businessunit
-                    )
-                    if uploaded:
-                        existing_bijlages.append(uploaded)
+                    try:
+                        uploaded = upload_file_to_storage(
+                            nf,
+                            store_in_db=False,
+                            klacht_id=klacht_id,
+                            klant_naam=klacht.klant.klantnaam if klacht.klant else None,
+                            klant_id_val=klant_id_existing,
+                            businessunit_name=businessunit
+                        )
+                        if uploaded:
+                            existing_bijlages.append(uploaded)
+                    except Exception as e:
+                        error_msg = f"Fout bij uploaden van bestand '{nf.filename}': {str(e)}"
+                        print(f"ERROR - {error_msg}")
+                        flash(error_msg, 'error')
+                        # Stop de operatie als upload faalt
+                        raise Exception(f"Upload van bijlage mislukt: {str(e)}")
 
         # Ensure referenced artikel/order rows exist
         # REMOVED: no longer automatically creates missing products/orders

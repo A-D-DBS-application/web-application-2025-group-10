@@ -18,3 +18,6 @@ __pycache__/
 # Flask / instance folder
 instance/
 
+# Uploaded files (should not be in repository - stored in Supabase Storage)
+uploads/
+
