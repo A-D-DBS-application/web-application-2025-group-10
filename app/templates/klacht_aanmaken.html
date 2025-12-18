@@ -56,7 +56,7 @@
 
                     <div class="form-group">
                         <label for="klant_naam" class="required">Klant</label>
-                        <input type="text" name="klant_naam" id="klant_naam" list="klanten_datalist" placeholder="Wordt automatisch ingevuld na selectie ordernummer, of begin te typen..." value="{{ request.form.get('klant_naam','') }}" required>
+                        <input type="text" name="klant_naam" id="klant_naam" list="klanten_datalist" placeholder="Wordt automatisch ingevuld na selectie ordernummer" value="{{ request.form.get('klant_naam','') }}" required readonly style="background-color: #f3f4f6; cursor: not-allowed;">
                         <input type="hidden" name="klant_id" id="klant_id" value="{{ request.form.get('klant_id','') }}">
                         <input type="hidden" name="is_new_customer" id="is_new_customer" value="false">
                         <datalist id="klanten_datalist">
@@ -64,7 +64,7 @@
                                 <option value="{{ klant.klantnaam }}" data-id="{{ klant.klant_id }}"></option>
                             {% endfor %}
                         </datalist>
-                        <small style="display: block; margin-top: 4px; color: #6b7280; font-size: 0.875rem;">Dit veld wordt automatisch ingevuld wanneer u een ordernummer selecteert, maar u kunt het ook handmatig aanpassen</small>
+                        <small style="display: block; margin-top: 4px; color: #6b7280; font-size: 0.875rem;">Dit veld wordt automatisch ingevuld wanneer u een ordernummer selecteert</small>
                     </div>
 
                     <div class="form-group">
@@ -280,27 +280,20 @@
             if (!orderInput || !orderDatalist || !klantNaamInput || !klantIdHidden) return false;
             const match = Array.from(orderDatalist.options).find(opt => String(opt.value) === String(orderInput.value));
             if (match) {
-                // Order gevonden: vul klant automatisch in (alleen als veld leeg is of gebruiker niet handmatig heeft getypt)
+                // Order gevonden: vul klant automatisch in (altijd, omdat veld readonly is)
                 const kid = match.dataset.klantid || '';
                 const kname = match.dataset.klantnaam || '';
-                const userEdited = klantNaamInput.dataset.userEdited === 'true';
                 
-                // Update hidden klant_id altijd
+                // Update hidden klant_id en klant naam altijd
                 klantIdHidden.value = kid;
-                
                 if (klantNaamInput) {
-                    // Vul alleen in als veld leeg is EN gebruiker niet handmatig heeft getypt
-                    if ((!klantNaamInput.value || klantNaamInput.value.trim() === '') && !userEdited) {
-                        klantNaamInput.value = kname;
-                    }
+                    klantNaamInput.value = kname;
                 }
                 return true;
             } else {
-                // Order niet gevonden: leeg klant veld alleen als het automatisch was ingevuld
-                // Behoud handmatige invoer van gebruiker
-                const userEdited = klantNaamInput ? klantNaamInput.dataset.userEdited === 'true' : false;
-                if (klantNaamInput && !userEdited) {
-                    klantIdHidden.value = '';
+                // Order niet gevonden: leeg klant veld
+                klantIdHidden.value = '';
+                if (klantNaamInput) {
                     klantNaamInput.value = '';
                 }
                 return false;
@@ -344,9 +337,9 @@
                 }
             }
             
-            // Valideer klant (wordt automatisch ingevuld na order selectie, maar kan handmatig worden aangepast)
+            // Valideer klant (wordt automatisch ingevuld na order selectie)
             if (klantNaamInput && klantIdHidden) {
-                // Sync klant selectie om klant_id bij te werken als gebruiker handmatig heeft getypt
+                // Sync klant selectie om klant_id bij te werken
                 syncKlantSelection();
                 
                 if (!klantNaamInput.value || !klantNaamInput.value.trim()) {
@@ -356,21 +349,12 @@
                         alert('Selecteer eerst een ordernummer. De klant wordt automatisch ingevuld.');
                         if (orderInput) orderInput.focus();
                     } else {
-                        alert('Klant is verplicht. Kies een klant uit de lijst of selecteer een ordernummer.');
-                        klantNaamInput.focus();
+                        alert('Klant kon niet worden bepaald. Controleer of het ordernummer correct is.');
+                        if (orderInput) orderInput.focus();
                     }
                 } else {
-                    // Controleer of klant uit datalist komt
-                    const match = Array.from(klantDatalist.options).find(opt => opt.value === klantNaamInput.value);
-                    if (!match) {
-                        isValid = false;
-                        klantNaamInput.style.borderColor = '#e63946';
-                        alert('Kies een bestaande klant uit de lijst.');
-                        klantNaamInput.focus();
-                    } else {
-                        klantIdHidden.value = match.dataset.id || '';
-                        klantNaamInput.style.borderColor = '';
-                    }
+                    // Klant is ingevuld (automatisch via ordernummer)
+                    klantNaamInput.style.borderColor = '';
                 }
             }
             
@@ -401,23 +385,15 @@
         });
 
         if (klantNaamInput) {
-            // Markeer dat gebruiker handmatig aan het typen is
-            klantNaamInput.addEventListener('input', function() {
-                this.dataset.userEdited = 'true';
-            });
+            // Klant veld is readonly, sync alleen bij change/blur (voor validatie)
             klantNaamInput.addEventListener('change', syncKlantSelection);
             klantNaamInput.addEventListener('blur', syncKlantSelection);
         }
         if (orderInput) {
+            // Bij elke wijziging van ordernummer, sync klant automatisch
             orderInput.addEventListener('change', syncOrderSelection);
             orderInput.addEventListener('blur', syncOrderSelection);
-            orderInput.addEventListener('input', function() {
-                // Reset userEdited flag wanneer ordernummer verandert
-                if (klantNaamInput) {
-                    klantNaamInput.dataset.userEdited = 'false';
-                }
-                syncOrderSelection();
-            });
+            orderInput.addEventListener('input', syncOrderSelection);
         }
         
         // Initialiseer: sync order eerst, dan klant
