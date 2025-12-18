@@ -812,6 +812,7 @@ def upload_file_to_storage(file_obj, store_in_db=False, klacht_id=None, klant_na
                 
                 print(f"DEBUG: Upload response status: {response.status_code}")
                 print(f"DEBUG: Upload response: {response.text[:200] if response.text else 'No response body'}")
+                print(f"DEBUG: Gebruikte key type: {'SERVICE_ROLE' if Config.SUPABASE_SERVICE_KEY else 'ANON (fallback - uploads kunnen falen!)'}")
                 
                 if response.status_code in [200, 201]:
                     # Haal publieke URL op
