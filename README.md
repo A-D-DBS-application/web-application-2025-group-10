@@ -30,7 +30,7 @@ How to run the app locally - enter the following in the terminal
       source venv/bin/activate
 - Install dependencies:
       pip install -r requirements.txt
-      or pip install Flask werkzeug supabase-py openpyxl pillow requests psycopg2-binary
+      or pip install Flask werkzeug supabase-py openpyxl pillow requests psycopg2-binary 
 - Start the app:
       python run.py
 - Open the app in your browser:
