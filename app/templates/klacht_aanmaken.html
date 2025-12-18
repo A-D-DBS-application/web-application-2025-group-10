@@ -56,7 +56,7 @@
 
                     <div class="form-group">
                         <label for="klant_naam" class="required">Klant</label>
-                        <input type="text" name="klant_naam" id="klant_naam" list="klanten_datalist" placeholder="Wordt automatisch ingevuld na selectie ordernummer" value="{{ request.form.get('klant_naam','') }}" required readonly style="background-color: #f3f4f6; cursor: not-allowed;">
+                        <input type="text" name="klant_naam" id="klant_naam" list="klanten_datalist" placeholder="Wordt automatisch ingevuld na selectie ordernummer, of begin te typen..." value="{{ request.form.get('klant_naam','') }}" required>
                         <input type="hidden" name="klant_id" id="klant_id" value="{{ request.form.get('klant_id','') }}">
                         <input type="hidden" name="is_new_customer" id="is_new_customer" value="false">
                         <datalist id="klanten_datalist">
@@ -64,7 +64,7 @@
                                 <option value="{{ klant.klantnaam }}" data-id="{{ klant.klant_id }}"></option>
                             {% endfor %}
                         </datalist>
-                        <small style="display: block; margin-top: 4px; color: #6b7280; font-size: 0.875rem;">Dit veld wordt automatisch ingevuld wanneer u een ordernummer selecteert</small>
+                        <small style="display: block; margin-top: 4px; color: #6b7280; font-size: 0.875rem;">Dit veld wordt automatisch ingevuld wanneer u een ordernummer selecteert, maar u kunt het ook handmatig aanpassen</small>
                     </div>
 
                     <div class="form-group">
@@ -280,21 +280,28 @@
             if (!orderInput || !orderDatalist || !klantNaamInput || !klantIdHidden) return false;
             const match = Array.from(orderDatalist.options).find(opt => String(opt.value) === String(orderInput.value));
             if (match) {
-                // Order gevonden: vul klant automatisch in
+                // Order gevonden: vul klant automatisch in (alleen als veld leeg is of gebruiker niet handmatig heeft getypt)
                 const kid = match.dataset.klantid || '';
                 const kname = match.dataset.klantnaam || '';
+                const userEdited = klantNaamInput.dataset.userEdited === 'true';
+                
+                // Update hidden klant_id altijd
                 klantIdHidden.value = kid;
+                
                 if (klantNaamInput) {
-                    klantNaamInput.value = kname;
-                    klantNaamInput.style.borderColor = kname ? '#10b981' : '#e63946';
+                    // Vul alleen in als veld leeg is EN gebruiker niet handmatig heeft getypt
+                    if ((!klantNaamInput.value || klantNaamInput.value.trim() === '') && !userEdited) {
+                        klantNaamInput.value = kname;
+                    }
                 }
                 return true;
             } else {
-                // Order niet gevonden: leeg klant veld
-                klantIdHidden.value = '';
-                if (klantNaamInput) {
+                // Order niet gevonden: leeg klant veld alleen als het automatisch was ingevuld
+                // Behoud handmatige invoer van gebruiker
+                const userEdited = klantNaamInput ? klantNaamInput.dataset.userEdited === 'true' : false;
+                if (klantNaamInput && !userEdited) {
+                    klantIdHidden.value = '';
                     klantNaamInput.value = '';
-                    klantNaamInput.style.borderColor = '#e63946';
                 }
                 return false;
             }
@@ -302,11 +309,12 @@
 
         
 
-        requiredFields.forEach(field => {
-            field.addEventListener('blur', function() {
-                this.style.borderColor = this.value ? '#10b981' : '#e63946';
-            });
-        });
+        // Verwijder automatische validatie styling bij blur - alleen bij submit
+        // requiredFields.forEach(field => {
+        //     field.addEventListener('blur', function() {
+        //         this.style.borderColor = this.value ? '#10b981' : '#e63946';
+        //     });
+        // });
 
         fileInput.addEventListener('change', function() {
             if (this.files.length > 0) {
@@ -320,33 +328,64 @@
 
         form.addEventListener('submit', function(e) {
             let isValid = true;
-            requiredFields.forEach(field => {
-                if (!field.value) {
-                    field.style.borderColor = '#e63946';
-                    isValid = false;
-                }
-            });
+            
             // Valideer eerst ordernummer (moet eerst worden ingevuld)
             if (orderInput && orderDatalist) {
                 const matchOrder = Array.from(orderDatalist.options).find(opt => String(opt.value) === String(orderInput.value));
-                if (!matchOrder) {
+                if (!matchOrder || !orderInput.value.trim()) {
                     isValid = false;
+                    orderInput.style.borderColor = '#e63946';
                     alert('Kies eerst een bestaand ordernummer uit de lijst. De klant wordt automatisch ingevuld.');
                     orderInput.focus();
                 } else {
-                    // Order is geldig, sync klant automatisch
+                    // Order is geldig, sync klant automatisch (alleen als veld leeg is)
                     syncOrderSelection();
+                    orderInput.style.borderColor = '';
                 }
             }
             
-            // Valideer klant (wordt automatisch ingevuld na order selectie)
+            // Valideer klant (wordt automatisch ingevuld na order selectie, maar kan handmatig worden aangepast)
             if (klantNaamInput && klantIdHidden) {
-                if (!klantIdHidden.value || !klantNaamInput.value) {
+                // Sync klant selectie om klant_id bij te werken als gebruiker handmatig heeft getypt
+                syncKlantSelection();
+                
+                if (!klantNaamInput.value || !klantNaamInput.value.trim()) {
                     isValid = false;
-                    alert('Selecteer eerst een ordernummer. De klant wordt automatisch ingevuld.');
-                    if (orderInput) orderInput.focus();
+                    klantNaamInput.style.borderColor = '#e63946';
+                    if (!orderInput || !orderInput.value) {
+                        alert('Selecteer eerst een ordernummer. De klant wordt automatisch ingevuld.');
+                        if (orderInput) orderInput.focus();
+                    } else {
+                        alert('Klant is verplicht. Kies een klant uit de lijst of selecteer een ordernummer.');
+                        klantNaamInput.focus();
+                    }
+                } else {
+                    // Controleer of klant uit datalist komt
+                    const match = Array.from(klantDatalist.options).find(opt => opt.value === klantNaamInput.value);
+                    if (!match) {
+                        isValid = false;
+                        klantNaamInput.style.borderColor = '#e63946';
+                        alert('Kies een bestaande klant uit de lijst.');
+                        klantNaamInput.focus();
+                    } else {
+                        klantIdHidden.value = match.dataset.id || '';
+                        klantNaamInput.style.borderColor = '';
+                    }
                 }
             }
+            
+            // Valideer andere required fields
+            requiredFields.forEach(field => {
+                // Skip klant en order als we die al hebben gevalideerd
+                if (field === klantNaamInput || field === orderInput) return;
+                
+                if (!field.value || !field.value.trim()) {
+                    field.style.borderColor = '#e63946';
+                    isValid = false;
+                } else {
+                    field.style.borderColor = '';
+                }
+            });
             
             if (artikelInput && productenDatalist) {
                 const matchArt = Array.from(productenDatalist.options).find(opt => String(opt.value) === String(artikelInput.value));
@@ -362,13 +401,23 @@
         });
 
         if (klantNaamInput) {
+            // Markeer dat gebruiker handmatig aan het typen is
+            klantNaamInput.addEventListener('input', function() {
+                this.dataset.userEdited = 'true';
+            });
             klantNaamInput.addEventListener('change', syncKlantSelection);
             klantNaamInput.addEventListener('blur', syncKlantSelection);
         }
         if (orderInput) {
             orderInput.addEventListener('change', syncOrderSelection);
             orderInput.addEventListener('blur', syncOrderSelection);
-            orderInput.addEventListener('input', syncOrderSelection);
+            orderInput.addEventListener('input', function() {
+                // Reset userEdited flag wanneer ordernummer verandert
+                if (klantNaamInput) {
+                    klantNaamInput.dataset.userEdited = 'false';
+                }
+                syncOrderSelection();
+            });
         }
         
         // Initialiseer: sync order eerst, dan klant
