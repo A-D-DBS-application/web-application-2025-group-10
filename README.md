@@ -14,6 +14,8 @@ https://drive.google.com/file/d/18SfOilAF-qQdakuNF6ZnbS-BkI-KCpPV/view?pli=1
 Link to DEMO:
 https://drive.google.com/file/d/1Ixf1_dJOtv0SNiEDwy69eTj1e9QwqCRm/view?usp=sharing
 
+Link to powerpoint presentation: 
+https://1drv.ms/p/c/ce8608b3d8e292f1/IQByqcZUP-JDQ6crQvYv5ICyAcL4xgt5J-lcK_gTr2dZQM0?e=JiOwX7
 
 
 
