@@ -38,7 +38,7 @@ websockets==15.0.1
 Werkzeug==3.1.4
 yarl==1.22.0
 openpyxl==3.1.5
-Pillow==9.5.0
+Pillow
 requests==2.32.3
 supabase==2.8.0
 python-dotenv==1.0.0
