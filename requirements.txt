@@ -11,12 +11,7 @@ Flask==3.1.2
 Flask-Migrate==4.1.0
 Flask-SQLAlchemy==3.1.1
 gunicorn==23.0.0
-h11==0.16.0
-h2==4.3.0
-hpack==4.1.0
-httpcore==1.0.9
-httpx==0.28.1
-hyperframe==6.1.0
+httpx>=0.24,<0.28
 idna==3.11
 itsdangerous==2.2.0
 Jinja2==3.1.6
@@ -40,5 +35,5 @@ yarl==1.22.0
 openpyxl==3.1.5
 Pillow
 requests==2.32.3
-supabase==2.8.0
+supabase
 python-dotenv==1.0.0
