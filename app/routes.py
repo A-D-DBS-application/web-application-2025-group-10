@@ -1451,7 +1451,7 @@ def admin_delete_user(user_id):
         # Blokkeer verwijderen als gebruiker nog open klachten heeft
         open_klachten = db.session.query(Klacht).filter_by(
             verantwoordelijke_id=user_id
-        ).filter(Klacht.status.notin_(['Afgehandeld', 'Afgewezen'])).all()
+        ).filter(Klacht.status != 'Afgehandeld').all()
         
         if open_klachten:
             count_open = len(open_klachten)

@@ -114,11 +114,8 @@
                         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                             <select name="status" class="edit-select" id="status_select">
                                 <option value="">Wijzig status</option>
-                                {% set disallowed_statuses = ['Goedgekeurd', 'Afgewezen'] %}
                                 {% for status in status_options %}
-                                    {% if status not in disallowed_statuses %}
-                                        <option value="{{ status }}" {% if klacht.status == status %}selected{% endif %}>{{ status }}</option>
-                                    {% endif %}
+                                    <option value="{{ status }}" {% if klacht.status == status %}selected{% endif %}>{{ status }}</option>
                                 {% endfor %}
                             </select>
                             <label style="display:flex;align-items:center;gap:6px; margin-left:8px;">
@@ -434,10 +431,6 @@
                 }
             }
             
-            if (statusSelect && statusSelect.value === 'Afgewezen') {
-                const sure = confirm('Zeker dat je deze klacht wilt afwijzen?');
-                if (!sure) { e.preventDefault(); return false; }
-            }
             
             if (!isValid) {
                 e.preventDefault();

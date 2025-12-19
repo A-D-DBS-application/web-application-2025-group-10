@@ -8,7 +8,7 @@ db = SQLAlchemy()
 # ENUM TYPES
 
 probleem_type_enum = ENUM('Technisch', 'Esthetisch', 'Service/Levering', 'Andere', name='probleem_type', create_type=False)
-klacht_status_enum = ENUM('Ingediend', 'Goedgekeurd', 'Afgewezen', 'In behandeling', 'Afgehandeld', name='klacht_status', create_type=False)
+klacht_status_enum = ENUM('Ingediend', 'In behandeling', 'Afgehandeld', name='klacht_status', create_type=False)
 gebruikersrol_enum = ENUM('Admin', 'Key user', 'User', name='gebruikersrol', create_type=False)
 
 
